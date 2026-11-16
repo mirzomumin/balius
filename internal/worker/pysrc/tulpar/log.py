@@ -1,0 +1,111 @@
+# Ported from granian (https://github.com/emmett-framework/granian), BSD-3-Clause.
+import copy
+import datetime
+import logging
+import logging.config
+import re
+import time
+from typing import Any
+
+log_levels_map = {
+    'critical': logging.CRITICAL,
+    'error': logging.ERROR,
+    'warning': logging.WARNING,
+    'warn': logging.WARNING,
+    'info': logging.INFO,
+    'debug': logging.DEBUG,
+    'notset': logging.NOTSET,
+}
+
+LOGGING_CONFIG = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'generic': {
+            '()': 'logging.Formatter',
+            'fmt': '[%(levelname)s] %(message)s',
+            'datefmt': '[%Y-%m-%d %H:%M:%S %z]',
+        },
+        'access': {
+            '()': 'logging.Formatter',
+            'fmt': '%(message)s',
+            'datefmt': '[%Y-%m-%d %H:%M:%S %z]',
+        },
+    },
+    'handlers': {
+        'console': {'formatter': 'generic', 'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout'},
+        'access': {'formatter': 'access', 'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout'},
+    },
+    'loggers': {
+        '_tulpar': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'tulpar.access': {'handlers': ['access'], 'level': 'INFO', 'propagate': False},
+    },
+}
+
+DEFAULT_ACCESSLOG_FMT = '[%(time)s] %(addr)s - "%(method)s %(path)s %(protocol)s" %(status)d %(dt_ms).3f'
+
+# NOTE: same name the Go runtime logs under
+logger = logging.getLogger('_tulpar')
+access_logger = logging.getLogger('tulpar.access')
+
+
+def configure_logging(level: str, config: dict[str, Any] | None = None, enabled: bool = True):
+    log_config = copy.deepcopy(LOGGING_CONFIG)
+
+    if config:
+        log_config.update(config)
+
+    log_config['loggers'].setdefault('_tulpar', {})['level'] = log_levels_map.get(level, logging.INFO)
+    logging.config.dictConfig(log_config)
+
+    if not enabled:
+        logger.setLevel(logging.CRITICAL + 1)
+
+
+_HEADER_RE = re.compile(r'%\(header\{([^}]+)\}\)s')
+
+
+def log_request_builder(fmt):
+    headers = []
+
+    def _replace_header(m):
+        idx = len(headers)
+        name = m.group(1).strip().lower()
+        headers.append(name)
+        return f'%(_h{idx})s'
+
+    fmt = _HEADER_RE.sub(_replace_header, fmt or '')
+    parse_headers = bool(headers)
+
+    now = datetime.datetime.now()
+    local_now = now.astimezone()
+    local_tz = local_now.tzinfo
+
+    def _build_log_dict(rtime, mtime, req, res_code):
+        dt = time.perf_counter() - mtime
+        rdt = datetime.datetime.fromtimestamp(rtime, tz=local_tz)
+        return {
+            'addr': req['addr_remote'],
+            'time': rdt.strftime('%Y-%m-%d %H:%M:%S %z'),
+            'dt_ms': dt * 1000,
+            'status': res_code,
+            'path': req['path'],
+            'query_string': req['qs'],
+            'method': req['method'],
+            'scheme': req['scheme'],
+            'protocol': req['protocol'],
+        }
+
+    def _build_log_dict_with_headers(rtime, mtime, req, res_code):
+        rv = _build_log_dict(rtime, mtime, req, res_code)
+        for idx, hkey in enumerate(headers):
+            rv[f'_h{idx}'] = req['headers'](hkey) or '-'
+        return rv
+
+    build_log_dict = _build_log_dict_with_headers if parse_headers else _build_log_dict
+
+    def log_request(rtime, mtime, req, res_code):
+        access_logger.info(fmt, build_log_dict(rtime, mtime, req, res_code))
+
+    log_request.parse_headers = parse_headers
+    return log_request

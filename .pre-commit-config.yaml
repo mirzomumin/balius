@@ -1,0 +1,41 @@
+# One code style for Go, C and Python. Install once: `pre-commit install`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.15.0
+    hooks:
+      - id: golangci-lint-fmt
+      - id: golangci-lint-full # whole module: cross-package checks need it
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v23.1.5
+    hooks:
+      - id: clang-format
+        types_or: [c]
+
+  - repo: local
+    hooks:
+      - id: go-test
+        name: go unit tests
+        entry: go test ./internal/...
+        language: system
+        pass_filenames: false
+        types: [go]
+        stages: [pre-push]

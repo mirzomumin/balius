@@ -1,0 +1,9 @@
+# C glue style (internal/worker/*.c, *.h)
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AlignConsecutiveMacros: Consecutive
+IndentPPDirectives: None
+SortIncludes: Never

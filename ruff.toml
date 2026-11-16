@@ -1,0 +1,18 @@
+# Python: the embedded package (internal/worker/pysrc) and the test apps.
+target-version = "py310"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = [
+  "SIM105", # contextlib.suppress: slower on the request path
+]
+
+[lint.per-file-ignores]
+# executed with SOURCES injected by the Go runtime
+"internal/worker/pysrc/_bootstrap.py" = ["F821"]
+# the test apps fail on purpose
+"tests/apps/*.py" = ["B018"]
+
+[format]
+quote-style = "single"
