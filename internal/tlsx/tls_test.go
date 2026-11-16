@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 func fixture(name string) string {

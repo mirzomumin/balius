@@ -1,8 +1,8 @@
 /*
- * tulpar - declarations shared by the C glue translation units.
+ * balius - declarations shared by the C glue translation units.
  */
-#ifndef TULPAR_GLUE_INTERNAL_H
-#define TULPAR_GLUE_INTERNAL_H
+#ifndef BALIUS_GLUE_INTERNAL_H
+#define BALIUS_GLUE_INTERNAL_H
 
 #include "glue.h"
 #include <structmember.h>
@@ -196,4 +196,4 @@ int gc_asgi_init(PyObject *module);
 int gc_rsgi_init(PyObject *module);
 int gc_wsgi_init(PyObject *module);
 
-#endif /* TULPAR_GLUE_INTERNAL_H */
+#endif /* BALIUS_GLUE_INTERNAL_H */

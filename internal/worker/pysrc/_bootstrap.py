@@ -1,4 +1,4 @@
-# Installs the importer serving the Python modules compiled into the tulpar
+# Installs the importer serving the Python modules compiled into the balius
 # binary. Executed once, right after the interpreter starts, with SOURCES
 # bound to a `{module name: (source, is_package)}` mapping.
 import sys
@@ -13,7 +13,7 @@ class EmbeddedImporter(MetaPathFinder, Loader):
     @staticmethod
     def _origin(fullname, is_package):
         path = fullname.replace('.', '/')
-        return f'<tulpar>/{path}/__init__.py' if is_package else f'<tulpar>/{path}.py'
+        return f'<balius>/{path}/__init__.py' if is_package else f'<balius>/{path}.py'
 
     def find_spec(self, fullname, path=None, target=None):
         entry = self._sources.get(fullname)

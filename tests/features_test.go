@@ -303,7 +303,7 @@ func TestStaticFilesRewriteAndMulti(t *testing.T) {
 // ---- sockets and workers -------------------------------------------------
 
 func TestUnixSocket(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "tulpar-uds")
+	dir, err := os.MkdirTemp("/tmp", "balius-uds")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,8 +350,8 @@ func TestMultipleWorkersAndMetrics(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	res := get(t, fmt.Sprintf("http://127.0.0.1:%d/", port))
 	for _, want := range []string{
-		"tulpar_workers_spawns 2", `tulpar_requests_handled{worker="1"}`, `tulpar_requests_handled{worker="2"}`,
-		"# TYPE tulpar_connections_active gauge",
+		"balius_workers_spawns 2", `balius_requests_handled{worker="1"}`, `balius_requests_handled{worker="2"}`,
+		"# TYPE balius_connections_active gauge",
 	} {
 		if !strings.Contains(res.Body, want) {
 			t.Errorf("metrics should contain %q:\n%s", want, res.Body)

@@ -1,4 +1,4 @@
-// Package config holds the configuration shared between the tulpar
+// Package config holds the configuration shared between the balius
 // supervisor process and its worker processes.
 //
 // The supervisor builds a Config from the command line, validates it and
@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-// Version is the tulpar release version.
+// Version is the balius release version.
 const Version = "0.1.0"
 
 // Interface names.

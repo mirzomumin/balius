@@ -1,4 +1,4 @@
-// Package supervisor is the tulpar main process: it owns the listening
+// Package supervisor is the balius main process: it owns the listening
 // socket, spawns the worker processes and keeps them healthy.
 //
 // It never touches Python: workers are copies of this same executable,
@@ -19,15 +19,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mirzomumin/tulpar/internal/config"
-	"github.com/mirzomumin/tulpar/internal/logx"
-	"github.com/mirzomumin/tulpar/internal/metrics"
-	"github.com/mirzomumin/tulpar/internal/netx"
-	"github.com/mirzomumin/tulpar/internal/worker"
+	"github.com/mirzomumin/balius/internal/config"
+	"github.com/mirzomumin/balius/internal/logx"
+	"github.com/mirzomumin/balius/internal/metrics"
+	"github.com/mirzomumin/balius/internal/netx"
+	"github.com/mirzomumin/balius/internal/worker"
 )
 
 // EnvWorker marks a process as a worker.
-const EnvWorker = "TULPAR_WORKER"
+const EnvWorker = "BALIUS_WORKER"
 
 // crashLoopWindow is how soon after a respawn a new failure of the same
 // worker is considered a crash loop.
@@ -112,7 +112,7 @@ type Supervisor struct {
 func New(cfg *config.Config) (*Supervisor, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("unable to locate the tulpar executable: %w", err)
+		return nil, fmt.Errorf("unable to locate the balius executable: %w", err)
 	}
 	return &Supervisor{
 		cfg:        cfg,
@@ -147,7 +147,7 @@ func (s *Supervisor) Run() int {
 }
 
 func (s *Supervisor) startup() error {
-	logx.Infof("Starting tulpar (main PID: %d)", s.pid)
+	logx.Infof("Starting balius (main PID: %d)", s.pid)
 	if err := s.writePIDFile(); err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func (s *Supervisor) initSocket() error {
 }
 
 func (s *Supervisor) shutdown() {
-	logx.Infof("Shutting down tulpar")
+	logx.Infof("Shutting down balius")
 	signal.Stop(s.signals)
 	if s.exporter != nil {
 		s.exporter.stop()
@@ -220,15 +220,15 @@ func (s *Supervisor) shutdown() {
 	}
 	s.stopWorkers()
 	s.unlinkFiles()
-	logx.Infof("tulpar shutdown completed, see ya!")
+	logx.Infof("balius shutdown completed, see ya!")
 }
 
 // workerEnviron is the environment handed to workers: the configuration
-// reaches them over their control pipe, so the TULPAR_* settings (the TLS key
+// reaches them over their control pipe, so the BALIUS_* settings (the TLS key
 // password among them) are kept away from the application.
 func workerEnviron(env []string) []string {
 	return slices.DeleteFunc(env, func(kv string) bool {
-		return strings.HasPrefix(kv, "TULPAR_") && !strings.HasPrefix(kv, "TULPAR_CPUPROFILE=")
+		return strings.HasPrefix(kv, "BALIUS_") && !strings.HasPrefix(kv, "BALIUS_CPUPROFILE=")
 	})
 }
 
@@ -253,7 +253,7 @@ func (s *Supervisor) spawn(idx int) (*proc, error) {
 
 	name := s.cfg.ProcessName
 	if name == "" {
-		name = "tulpar"
+		name = "balius"
 	}
 	cmd := &exec.Cmd{
 		Path:   s.exe,

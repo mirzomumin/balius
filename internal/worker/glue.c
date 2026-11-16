@@ -1,5 +1,5 @@
 /*
- * tulpar - C glue: interpreter lifecycle, the `_tulpar` builtin module,
+ * balius - C glue: interpreter lifecycle, the `_balius` builtin module,
  * shared helpers and the awaitable types.
  */
 #include "glue_internal.h"
@@ -176,17 +176,17 @@ int gc_hbuf_headers(gc_hbuf *b, PyObject *headers, int text) {
 
 /* ---- generic helpers --------------------------------------------------- */
 
-void tulpar_incref(PyObject *o) {
+void balius_incref(PyObject *o) {
     Py_XINCREF(o);
 }
-void tulpar_decref(PyObject *o) {
+void balius_decref(PyObject *o) {
     Py_XDECREF(o);
 }
 
-PyObject *tulpar_none(void) {
+PyObject *balius_none(void) {
     Py_RETURN_NONE;
 }
-PyObject *tulpar_bytes(const char *p, Py_ssize_t n) {
+PyObject *balius_bytes(const char *p, Py_ssize_t n) {
     return PyBytes_FromStringAndSize(p, n);
 }
 
@@ -205,7 +205,7 @@ static PyObject *exc_type(int kind) {
     }
 }
 
-PyObject *tulpar_raise(int kind, const char *msg) {
+PyObject *balius_raise(int kind, const char *msg) {
     PyErr_SetString(exc_type(kind), msg);
     return NULL;
 }
@@ -215,7 +215,7 @@ void gc_report_exc(const char *where) {
     if (!PyErr_Occurred()) {
         return;
     }
-    PySys_WriteStderr("tulpar: unexpected error in %s\n", where);
+    PySys_WriteStderr("balius: unexpected error in %s\n", where);
     PyErr_Print();
 }
 
@@ -292,7 +292,7 @@ static PyAsyncMethods ready_async = {
 };
 
 static PyTypeObject ReadyType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.Ready",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.Ready",
     .tp_basicsize = sizeof(ReadyObject),
     .tp_dealloc = (destructor)ready_dealloc,
     .tp_as_async = &ready_async,
@@ -302,11 +302,11 @@ static PyTypeObject ReadyType = {
     .tp_iternext = (iternextfunc)ready_next,
 };
 
-PyObject *tulpar_empty(void) {
+PyObject *balius_empty(void) {
     return Py_NewRef(g_empty);
 }
 
-PyObject *tulpar_done(PyObject *value) {
+PyObject *balius_done(PyObject *value) {
     if (!value) {
         return NULL;
     }
@@ -319,9 +319,9 @@ PyObject *tulpar_done(PyObject *value) {
     return (PyObject *)r;
 }
 
-PyObject *tulpar_future_new(void) {
+PyObject *balius_future_new(void) {
     if (!g_create_future) {
-        PyErr_SetString(PyExc_RuntimeError, "tulpar event loop is not running");
+        PyErr_SetString(PyExc_RuntimeError, "balius event loop is not running");
         return NULL;
     }
     PyObject *fut = PyObject_CallNoArgs(g_create_future);
@@ -331,7 +331,7 @@ PyObject *tulpar_future_new(void) {
     return fut;
 }
 
-void tulpar_future_set(PyObject *fut, PyObject *value) {
+void balius_future_set(PyObject *fut, PyObject *value) {
     if (!value) {
         /* building the value failed: surface the error to the awaiter */
         PyObject *exc = gc_take_exc();
@@ -356,7 +356,7 @@ void tulpar_future_set(PyObject *fut, PyObject *value) {
     Py_DECREF(fut);
 }
 
-void tulpar_future_fail(PyObject *fut, int kind, const char *msg) {
+void balius_future_fail(PyObject *fut, int kind, const char *msg) {
     PyObject *exc = PyObject_CallFunction(exc_type(kind), "s", msg);
     if (exc) {
         PyObject *r = PyObject_CallMethodOneArg(fut, S_set_exception, exc);
@@ -371,7 +371,7 @@ void tulpar_future_fail(PyObject *fut, int kind, const char *msg) {
     Py_DECREF(fut);
 }
 
-void tulpar_call_stop(void) {
+void balius_call_stop(void) {
     if (!g_stop_cb) {
         return;
     }
@@ -442,7 +442,7 @@ static PyMemberDef watcher_members[] = {
  * reference to the running asyncio task; keeping that edge invisible to the
  * cycle collector is what keeps the task alive until the coroutine ends. */
 static PyTypeObject WatcherType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.CallbackWatcher",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.CallbackWatcher",
     .tp_basicsize = sizeof(GcWatcher),
     .tp_dealloc = (destructor)watcher_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -596,11 +596,11 @@ static PyMethodDef module_methods[] = {
 };
 
 static struct PyModuleDef module_def = {
-    PyModuleDef_HEAD_INIT, .m_name = "_tulpar",         .m_doc = "tulpar runtime bindings",
+    PyModuleDef_HEAD_INIT, .m_name = "_balius",         .m_doc = "balius runtime bindings",
     .m_size = -1,          .m_methods = module_methods,
 };
 
-static PyObject *PyInit__tulpar(void) {
+static PyObject *PyInit__balius(void) {
     PyObject *m = PyModule_Create(&module_def);
     if (!m) {
         return NULL;
@@ -626,8 +626,8 @@ static PyObject *PyInit__tulpar(void) {
     empty->value = NULL;
     g_empty = (PyObject *)empty;
 
-    GcExc_RSGIProtocolError = PyErr_NewException("_tulpar.RSGIProtocolError", PyExc_RuntimeError, NULL);
-    GcExc_RSGIProtocolClosed = PyErr_NewException("_tulpar.RSGIProtocolClosed", PyExc_RuntimeError, NULL);
+    GcExc_RSGIProtocolError = PyErr_NewException("_balius.RSGIProtocolError", PyExc_RuntimeError, NULL);
+    GcExc_RSGIProtocolClosed = PyErr_NewException("_balius.RSGIProtocolClosed", PyExc_RuntimeError, NULL);
     if (!GcExc_RSGIProtocolError || !GcExc_RSGIProtocolClosed) {
         return NULL;
     }
@@ -650,9 +650,9 @@ static void copy_err(char *errbuf, size_t errlen, const char *msg) {
     }
 }
 
-int tulpar_py_init(const char *executable, char *errbuf, size_t errlen) {
-    if (PyImport_AppendInittab("_tulpar", PyInit__tulpar) < 0) {
-        copy_err(errbuf, errlen, "unable to register the _tulpar module");
+int balius_py_init(const char *executable, char *errbuf, size_t errlen) {
+    if (PyImport_AppendInittab("_balius", PyInit__balius) < 0) {
+        copy_err(errbuf, errlen, "unable to register the _balius module");
         return -1;
     }
 
@@ -675,7 +675,7 @@ int tulpar_py_init(const char *executable, char *errbuf, size_t errlen) {
         }
     }
     {
-        char *argv[] = {"tulpar"};
+        char *argv[] = {"balius"};
         status = PyConfig_SetBytesArgv(&config, 1, argv);
         if (PyStatus_Exception(status)) {
             goto fail;
@@ -700,7 +700,7 @@ fail:
     return -1;
 }
 
-int tulpar_py_add_source(const char *name, const char *src, Py_ssize_t len, int is_pkg) {
+int balius_py_add_source(const char *name, const char *src, Py_ssize_t len, int is_pkg) {
     PyObject *value = Py_BuildValue("(s#O)", src, len, is_pkg ? Py_True : Py_False);
     if (!value) {
         PyErr_Print();
@@ -714,7 +714,7 @@ int tulpar_py_add_source(const char *name, const char *src, Py_ssize_t len, int 
     return rc;
 }
 
-int tulpar_py_bootstrap(const char *src) {
+int balius_py_bootstrap(const char *src) {
     PyObject *globals = PyDict_New();
     if (!globals) {
         PyErr_Print();
@@ -736,8 +736,8 @@ int tulpar_py_bootstrap(const char *src) {
     return 0;
 }
 
-int tulpar_py_run_worker(const char *cfg_json) {
-    PyObject *mod = PyImport_ImportModule("tulpar._worker");
+int balius_py_run_worker(const char *cfg_json) {
+    PyObject *mod = PyImport_ImportModule("balius._worker");
     if (!mod) {
         PyErr_Print();
         return 1;
@@ -757,6 +757,6 @@ int tulpar_py_run_worker(const char *cfg_json) {
     return (int)code;
 }
 
-int tulpar_py_finalize(void) {
+int balius_py_finalize(void) {
     return Py_FinalizeEx();
 }

@@ -1,5 +1,5 @@
 /*
- * tulpar - C glue: ASGI scope construction, protocol objects and messages.
+ * balius - C glue: ASGI scope construction, protocol objects and messages.
  */
 #include "glue_internal.h"
 
@@ -156,7 +156,7 @@ static int msg_set(PyObject *d, PyObject *key, PyObject *value /* stolen */) {
     return rc;
 }
 
-PyObject *tulpar_asgi_msg_request(const char *body, Py_ssize_t n, int more) {
+PyObject *balius_asgi_msg_request(const char *body, Py_ssize_t n, int more) {
     PyObject *d = msg_new(S_http_request);
     if (!d) {
         return NULL;
@@ -169,15 +169,15 @@ PyObject *tulpar_asgi_msg_request(const char *body, Py_ssize_t n, int more) {
     return d;
 }
 
-PyObject *tulpar_asgi_msg_disconnect(void) {
+PyObject *balius_asgi_msg_disconnect(void) {
     return msg_new(S_http_disconnect);
 }
 
-PyObject *tulpar_asgi_msg_ws_connect(void) {
+PyObject *balius_asgi_msg_ws_connect(void) {
     return msg_new(S_websocket_connect);
 }
 
-PyObject *tulpar_asgi_msg_ws_text(const char *p, Py_ssize_t n) {
+PyObject *balius_asgi_msg_ws_text(const char *p, Py_ssize_t n) {
     PyObject *d = msg_new(S_websocket_receive);
     if (d && msg_set(d, S_text, PyUnicode_DecodeUTF8(p, n, "replace")) < 0) {
         Py_CLEAR(d);
@@ -185,7 +185,7 @@ PyObject *tulpar_asgi_msg_ws_text(const char *p, Py_ssize_t n) {
     return d;
 }
 
-PyObject *tulpar_asgi_msg_ws_bytes(const char *p, Py_ssize_t n) {
+PyObject *balius_asgi_msg_ws_bytes(const char *p, Py_ssize_t n) {
     PyObject *d = msg_new(S_websocket_receive);
     if (d && msg_set(d, S_bytes, PyBytes_FromStringAndSize(p, n)) < 0) {
         Py_CLEAR(d);
@@ -193,7 +193,7 @@ PyObject *tulpar_asgi_msg_ws_bytes(const char *p, Py_ssize_t n) {
     return d;
 }
 
-PyObject *tulpar_asgi_msg_ws_disconnect(int code) {
+PyObject *balius_asgi_msg_ws_disconnect(int code) {
     PyObject *d = msg_new(S_websocket_disconnect);
     if (d && msg_set(d, S_code, PyLong_FromLong(code)) < 0) {
         Py_CLEAR(d);
@@ -458,7 +458,7 @@ static PyGetSetDef asgi_http_getset[] = {
 };
 
 static PyTypeObject AsgiHTTPType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.ASGIHTTPProtocol",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.ASGIHTTPProtocol",
     .tp_basicsize = sizeof(GcProto),
     .tp_dealloc = (destructor)gc_proto_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -467,7 +467,7 @@ static PyTypeObject AsgiHTTPType = {
 };
 
 static PyTypeObject AsgiWSType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.ASGIWebsocketProtocol",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.ASGIWebsocketProtocol",
     .tp_basicsize = sizeof(GcProto),
     .tp_dealloc = (destructor)gc_proto_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -476,7 +476,7 @@ static PyTypeObject AsgiWSType = {
 
 /* ---- dispatch -------------------------------------------------------------- */
 
-void tulpar_asgi_dispatch(int kind, uintptr_t h, const char *head, Py_ssize_t n) {
+void balius_asgi_dispatch(int kind, uintptr_t h, const char *head, Py_ssize_t n) {
     gc_dispatch(kind == GC_KIND_WS ? &AsgiWSType : &AsgiHTTPType, build_scope, kind, h, head, n);
 }
 

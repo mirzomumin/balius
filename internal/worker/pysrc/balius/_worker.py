@@ -1,4 +1,4 @@
-"""Python side of a tulpar worker process.
+"""Python side of a balius worker process.
 
 The Go runtime boots the interpreter on the process main thread and calls
 `main` with the worker specification. From there this module loads the
@@ -14,7 +14,7 @@ import traceback
 from functools import partial
 from pathlib import Path
 
-import _tulpar
+import _balius
 
 from ._internal import load_target
 from .asgi import LifespanProtocol
@@ -68,11 +68,11 @@ def _serve_loop(loop, wcallback):
     """Hands the application to the Go server and runs the event loop until
     the server asks to stop."""
     stop = asyncio.Event()
-    wake_fd = _tulpar.wake_fd()
+    wake_fd = _balius.wake_fd()
     # everything the Go runtime wants done on the loop goes through `drain`
-    loop.add_reader(wake_fd, _tulpar.drain)
+    loop.add_reader(wake_fd, _balius.drain)
     try:
-        _tulpar.serve(loop, wcallback, stop.set, _log_app_exc)
+        _balius.serve(loop, wcallback, stop.set, _log_app_exc)
         loop.run_until_complete(stop.wait())
     finally:
         loop.remove_reader(wake_fd)
@@ -131,7 +131,7 @@ def _run_wsgi(cfg, loader, access_log_fmt, scope_opts):
     callback = loader()
     wcallback = _wsgi_call_wrap(callback, scope_opts, access_log_fmt)
     # blocks (without holding the GIL) until the server stops
-    _tulpar.serve_wsgi(wcallback, _log_app_exc)
+    _balius.serve_wsgi(wcallback, _log_app_exc)
     return 0
 
 

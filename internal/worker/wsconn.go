@@ -11,7 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/mirzomumin/tulpar/internal/static"
+	"github.com/mirzomumin/balius/internal/static"
 )
 
 // isWebsocketUpgrade tells whether a request asks to switch to websockets.

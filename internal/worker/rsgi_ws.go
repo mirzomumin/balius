@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/logx"
+	"github.com/mirzomumin/balius/internal/logx"
 )
 
 // rsgiWS is the state of one RSGI websocket connection.
@@ -76,8 +76,8 @@ func (w *Worker) serveRSGIWebsocket(rw http.ResponseWriter, r *http.Request, ci 
 	}
 	self := d.self
 	d.fut.resolveWith(func() pyObj {
-		transport := C.tulpar_rsgi_ws_transport(self)
-		C.tulpar_decref(self)
+		transport := C.balius_rsgi_ws_transport(self)
+		C.balius_decref(self)
 		return transport
 	})
 
@@ -91,8 +91,8 @@ func (w *Worker) serveRSGIWebsocket(rw http.ResponseWriter, r *http.Request, ci 
 // protocol reference the accept took.
 func (w *Worker) failAccept(d wsDecision) {
 	w.loop.Submit(func() {
-		C.tulpar_future_fail(d.fut.obj, C.GC_ERR_RSGI_PROTO, cmsg(rsgiProtocolError))
-		C.tulpar_decref(d.self)
+		C.balius_future_fail(d.fut.obj, C.GC_ERR_RSGI_PROTO, cmsg(rsgiProtocolError))
+		C.balius_decref(d.self)
 	})
 }
 
@@ -149,7 +149,7 @@ func (p *rsgiWS) accept(self pyObj) pyObj {
 	}
 	p.decided = true
 	// the transport handed to the application keeps the protocol alive
-	C.tulpar_incref(self)
+	C.balius_incref(self)
 	p.decision <- wsDecision{accept: true, fut: fut, self: self}
 	p.mu.Unlock()
 	return obj
@@ -174,16 +174,16 @@ func (p *rsgiWS) receive() pyObj {
 			fut.fail(C.GC_ERR_RSGI_CLOSED, rsgiClosedError)
 		case in.closed:
 			p.closed.Store(true)
-			fut.resolveWith(func() pyObj { return C.tulpar_rsgi_ws_message(0, nil, 0) })
+			fut.resolveWith(func() pyObj { return C.balius_rsgi_ws_message(0, nil, 0) })
 		case in.text:
 			fut.resolveWith(func() pyObj {
 				cp, cn := cbuf(in.data)
-				return C.tulpar_rsgi_ws_message(2, cp, cn)
+				return C.balius_rsgi_ws_message(2, cp, cn)
 			})
 		default:
 			fut.resolveWith(func() pyObj {
 				cp, cn := cbuf(in.data)
-				return C.tulpar_rsgi_ws_message(1, cp, cn)
+				return C.balius_rsgi_ws_message(1, cp, cn)
 			})
 		}
 	}()

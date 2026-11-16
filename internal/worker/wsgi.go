@@ -58,7 +58,7 @@ func (w *Worker) serveWSGI(rw http.ResponseWriter, r *http.Request, ci *connInfo
 	accepted := w.pool.run(func(ts *C.PyThreadState) {
 		hp, hn := cbuf(*head)
 		var waitUs C.int64_t
-		failed := C.tulpar_wsgi_run(ts, C.uintptr_t(h), hp, hn, &waitUs) != 0
+		failed := C.balius_wsgi_run(ts, C.uintptr_t(h), hp, hn, &waitUs) != 0
 		w.metrics.PyWait.Add(int64(waitUs))
 		handles.del(h)
 		putHead(head)

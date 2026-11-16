@@ -1,4 +1,4 @@
-module github.com/mirzomumin/tulpar
+module github.com/mirzomumin/balius
 
 go 1.26.0
 

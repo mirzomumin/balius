@@ -1,4 +1,4 @@
-// tulpar is a Go HTTP server for Python applications: a port of granian
+// balius is a Go HTTP server for Python applications: a port of granian
 // (https://github.com/emmett-framework/granian) from Rust to Go.
 //
 // The same executable plays two roles. Started by a user it is the
@@ -11,9 +11,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/mirzomumin/tulpar/internal/cli"
-	"github.com/mirzomumin/tulpar/internal/supervisor"
-	"github.com/mirzomumin/tulpar/internal/worker"
+	"github.com/mirzomumin/balius/internal/cli"
+	"github.com/mirzomumin/balius/internal/supervisor"
+	"github.com/mirzomumin/balius/internal/worker"
 )
 
 func init() {

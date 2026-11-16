@@ -22,11 +22,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/config"
-	"github.com/mirzomumin/tulpar/internal/logx"
+	"github.com/mirzomumin/balius/internal/config"
+	"github.com/mirzomumin/balius/internal/logx"
 )
 
-// The Python half of tulpar: the modules below are compiled into the
+// The Python half of balius: the modules below are compiled into the
 // binary and served to the interpreter by a meta path finder.
 //
 //go:embed all:pysrc
@@ -69,7 +69,7 @@ func initPython(cfg *config.Config) error {
 	}
 	errbuf := (*C.char)(C.calloc(1, 512))
 	defer C.free(unsafe.Pointer(errbuf))
-	if C.tulpar_py_init(cexe, errbuf, 512) != 0 {
+	if C.balius_py_init(cexe, errbuf, 512) != 0 {
 		return fmt.Errorf("unable to initialize Python: %s", C.GoString(errbuf))
 	}
 
@@ -96,7 +96,7 @@ func initPython(cfg *config.Config) error {
 		defer C.free(unsafe.Pointer(name))
 		csrc := C.CString(string(src))
 		defer C.free(unsafe.Pointer(csrc))
-		if C.tulpar_py_add_source(name, csrc, C.Py_ssize_t(len(src)), C.int(isPkg)) != 0 {
+		if C.balius_py_add_source(name, csrc, C.Py_ssize_t(len(src)), C.int(isPkg)) != 0 {
 			return fmt.Errorf("unable to register embedded module %s", rel)
 		}
 		return nil
@@ -109,7 +109,7 @@ func initPython(cfg *config.Config) error {
 	}
 	cboot := C.CString(bootstrap)
 	defer C.free(unsafe.Pointer(cboot))
-	if C.tulpar_py_bootstrap(cboot) != 0 {
+	if C.balius_py_bootstrap(cboot) != 0 {
 		return errors.New("unable to install the embedded modules importer")
 	}
 	return nil
@@ -226,7 +226,7 @@ func cstr(s string) (*C.char, C.Py_ssize_t) {
 
 func pyBytes(b []byte) pyObj {
 	p, n := cbuf(b)
-	return C.tulpar_bytes(p, n)
+	return C.balius_bytes(p, n)
 }
 
 // Static error messages, converted once.
@@ -247,10 +247,10 @@ func cmsg(msg string) *C.char {
 // pyRaise sets a Python exception and returns NULL, ready to be returned
 // from an exported function.
 func pyRaise(kind C.int, msg string) pyObj {
-	return C.tulpar_raise(kind, cmsg(msg))
+	return C.balius_raise(kind, cmsg(msg))
 }
 
-func pyEmpty() pyObj { return C.tulpar_empty() }
+func pyEmpty() pyObj { return C.balius_empty() }
 
 // pyFuture is an asyncio future owned by the Go side until it is resolved.
 // Resolution always happens on the loop thread.
@@ -263,7 +263,7 @@ type pyFuture struct {
 // one to hand back to Python; ok is false when the future could not be
 // created, in which case a Python exception is set.
 func (l *loopBridge) newFuture() (pyFuture, pyObj, bool) {
-	fut := C.tulpar_future_new()
+	fut := C.balius_future_new()
 	if fut == nil {
 		return pyFuture{}, nil, false
 	}
@@ -273,17 +273,17 @@ func (l *loopBridge) newFuture() (pyFuture, pyObj, bool) {
 // resolveWith completes the future with the object built by build, which
 // runs on the loop thread.
 func (f pyFuture) resolveWith(build func() pyObj) {
-	f.loop.Submit(func() { C.tulpar_future_set(f.obj, build()) })
+	f.loop.Submit(func() { C.balius_future_set(f.obj, build()) })
 }
 
 // resolveNone completes the future with None.
 func (f pyFuture) resolveNone() {
-	f.loop.Submit(func() { C.tulpar_future_set(f.obj, C.tulpar_none()) })
+	f.loop.Submit(func() { C.balius_future_set(f.obj, C.balius_none()) })
 }
 
 // fail completes the future with an exception.
 func (f pyFuture) fail(kind C.int, msg string) {
-	f.loop.Submit(func() { C.tulpar_future_fail(f.obj, kind, cmsg(msg)) })
+	f.loop.Submit(func() { C.balius_future_fail(f.obj, kind, cmsg(msg)) })
 }
 
 // ---------------------------------------------------------------------------

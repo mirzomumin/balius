@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/logx"
+	"github.com/mirzomumin/balius/internal/logx"
 )
 
 // wsDecision is the application's verdict on a websocket handshake.
@@ -150,9 +150,9 @@ func (p *asgiWS) receive() pyObj {
 		// the first event is always the connection request
 		p.initRx = true
 		if p.closed.Load() {
-			return C.tulpar_done(C.tulpar_asgi_msg_ws_disconnect(wsCloseNoStatus))
+			return C.balius_done(C.balius_asgi_msg_ws_disconnect(wsCloseNoStatus))
 		}
-		return C.tulpar_done(C.tulpar_asgi_msg_ws_connect())
+		return C.balius_done(C.balius_asgi_msg_ws_connect())
 	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
@@ -168,7 +168,7 @@ func (p *asgiWS) receive() pyObj {
 		if conn == nil || p.closed.Load() {
 			if p.closed.Load() {
 				fut.resolveWith(func() pyObj {
-					return C.tulpar_asgi_msg_ws_disconnect(wsCloseNoStatus)
+					return C.balius_asgi_msg_ws_disconnect(wsCloseNoStatus)
 				})
 			} else {
 				fut.fail(C.GC_ERR_RUNTIME, "ASGI flow error: Transport not initialized or closed")
@@ -180,16 +180,16 @@ func (p *asgiWS) receive() pyObj {
 		case in.closed:
 			p.closed.Store(true)
 			code := C.int(in.closeCode)
-			fut.resolveWith(func() pyObj { return C.tulpar_asgi_msg_ws_disconnect(code) })
+			fut.resolveWith(func() pyObj { return C.balius_asgi_msg_ws_disconnect(code) })
 		case in.text:
 			fut.resolveWith(func() pyObj {
 				cp, cn := cbuf(in.data)
-				return C.tulpar_asgi_msg_ws_text(cp, cn)
+				return C.balius_asgi_msg_ws_text(cp, cn)
 			})
 		default:
 			fut.resolveWith(func() pyObj {
 				cp, cn := cbuf(in.data)
-				return C.tulpar_asgi_msg_ws_bytes(cp, cn)
+				return C.balius_asgi_msg_ws_bytes(cp, cn)
 			})
 		}
 	}()

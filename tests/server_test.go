@@ -1,8 +1,8 @@
-// Package tests holds the end-to-end tests of tulpar: they run the real
+// Package tests holds the end-to-end tests of balius: they run the real
 // binary against the Python applications in tests/apps, mirroring granian's
 // test suite.
 //
-// Run them through `make test-integration`, or point TULPAR_BIN at a built
+// Run them through `make test-integration`, or point BALIUS_BIN at a built
 // binary and run `go test ./tests/`.
 package tests
 
@@ -40,17 +40,17 @@ func fixture(parts ...string) string {
 
 func binary(t *testing.T) string {
 	t.Helper()
-	bin := os.Getenv("TULPAR_BIN")
+	bin := os.Getenv("BALIUS_BIN")
 	if bin == "" {
-		bin = filepath.Join(repoRoot, "bin", "tulpar")
+		bin = filepath.Join(repoRoot, "bin", "balius")
 	}
 	if _, err := os.Stat(bin); err != nil {
-		t.Skipf("tulpar binary not found at %s (build it with `make build` or set TULPAR_BIN)", bin)
+		t.Skipf("balius binary not found at %s (build it with `make build` or set BALIUS_BIN)", bin)
 	}
 	return bin
 }
 
-// server is a running tulpar instance.
+// server is a running balius instance.
 type server struct {
 	t    *testing.T
 	cmd  *exec.Cmd
@@ -65,7 +65,7 @@ type server struct {
 
 var listenRe = regexp.MustCompile(`Listening at: \w+://(\S+)`)
 
-// startServer runs tulpar with the given arguments (the target included)
+// startServer runs balius with the given arguments (the target included)
 // and waits until every worker is serving. Unless the arguments say
 // otherwise it binds 127.0.0.1 on a free port.
 func startServer(t *testing.T, args ...string) *server {
@@ -126,9 +126,9 @@ func startServer(t *testing.T, args ...string) *server {
 			s.Port, _ = strconv.Atoi(port)
 		}
 	case <-s.exited:
-		t.Fatalf("tulpar exited before serving:\n%s", s.Output())
+		t.Fatalf("balius exited before serving:\n%s", s.Output())
 	case <-time.After(20 * time.Second):
-		t.Fatalf("tulpar did not start in time:\n%s", s.Output())
+		t.Fatalf("balius did not start in time:\n%s", s.Output())
 	}
 	return s
 }
@@ -172,7 +172,7 @@ func (s *server) Stop() int {
 	case <-time.After(15 * time.Second):
 		_ = s.cmd.Process.Kill()
 		<-s.exited
-		s.t.Errorf("tulpar did not stop gracefully:\n%s", s.Output())
+		s.t.Errorf("balius did not stop gracefully:\n%s", s.Output())
 	}
 	return s.cmd.ProcessState.ExitCode()
 }

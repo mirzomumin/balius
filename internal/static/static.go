@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 // ServerName is the value of the Server response header.
-const ServerName = "tulpar"
+const ServerName = "balius"
 
 // Files is a set of static mounts.
 type Files struct {

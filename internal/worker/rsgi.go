@@ -127,7 +127,7 @@ func (p *rsgiHTTP) readAll() pyObj {
 	}
 	p.bodyTaken = true
 	if p.body.empty {
-		return C.tulpar_done(C.tulpar_bytes(nil, 0))
+		return C.balius_done(C.balius_bytes(nil, 0))
 	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {

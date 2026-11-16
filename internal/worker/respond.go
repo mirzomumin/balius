@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/logx"
-	"github.com/mirzomumin/tulpar/internal/static"
+	"github.com/mirzomumin/balius/internal/logx"
+	"github.com/mirzomumin/balius/internal/static"
 )
 
 // headerKV is a response header as provided by the application.

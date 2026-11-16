@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 func newFiles(t *testing.T, dirToFile string) (*Files, string) {

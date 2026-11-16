@@ -1,4 +1,4 @@
-// Package worker is a tulpar worker process: an embedded CPython
+// Package worker is a balius worker process: an embedded CPython
 // interpreter running the application, served by Go's HTTP stack.
 //
 // Division of labour:
@@ -37,12 +37,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/config"
-	"github.com/mirzomumin/tulpar/internal/logx"
-	"github.com/mirzomumin/tulpar/internal/metrics"
-	"github.com/mirzomumin/tulpar/internal/netx"
-	"github.com/mirzomumin/tulpar/internal/static"
-	"github.com/mirzomumin/tulpar/internal/tlsx"
+	"github.com/mirzomumin/balius/internal/config"
+	"github.com/mirzomumin/balius/internal/logx"
+	"github.com/mirzomumin/balius/internal/metrics"
+	"github.com/mirzomumin/balius/internal/netx"
+	"github.com/mirzomumin/balius/internal/static"
+	"github.com/mirzomumin/balius/internal/tlsx"
 )
 
 // File descriptors inherited from the supervisor.
@@ -90,15 +90,15 @@ var current *Worker
 // Run is the entry point of a worker process. It must be called from the
 // main goroutine, locked to the main OS thread. It returns the exit code.
 func Run() int {
-	control := os.NewFile(FdControl, "tulpar-control")
+	control := os.NewFile(FdControl, "balius-control")
 	line, err := bufio.NewReader(control).ReadBytes('\n')
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "tulpar worker: unable to read the configuration from the supervisor")
+		fmt.Fprintln(os.Stderr, "balius worker: unable to read the configuration from the supervisor")
 		return 2
 	}
 	spec := &Spec{}
 	if err := json.Unmarshal(line, spec); err != nil || spec.Config == nil {
-		fmt.Fprintln(os.Stderr, "tulpar worker: invalid configuration received from the supervisor")
+		fmt.Fprintln(os.Stderr, "balius worker: invalid configuration received from the supervisor")
 		return 2
 	}
 	cfg := spec.Config
@@ -130,7 +130,7 @@ func Run() int {
 		w.pool = newPyPool(cfg.BlockingThreads, time.Duration(cfg.BlockingThreadsIdleTimeout)*time.Second, w.metrics)
 	}
 
-	if path := os.Getenv("TULPAR_CPUPROFILE"); path != "" {
+	if path := os.Getenv("BALIUS_CPUPROFILE"); path != "" {
 		// a profile per worker: <path>.<worker id>
 		if f, err := os.Create(fmt.Sprintf("%s.%d", path, w.id)); err == nil {
 			if pprof.StartCPUProfile(f) == nil {
@@ -147,7 +147,7 @@ func Run() int {
 		return 1
 	}
 	cjson := C.CString(string(line))
-	code := int(C.tulpar_py_run_worker(cjson))
+	code := int(C.balius_py_run_worker(cjson))
 	C.free(unsafe.Pointer(cjson))
 
 	if w.started {
@@ -156,7 +156,7 @@ func Run() int {
 		w.shutdown()
 		<-w.stopped
 	}
-	C.tulpar_py_finalize()
+	C.balius_py_finalize()
 	return code
 }
 
@@ -213,7 +213,7 @@ func (w *Worker) start() error {
 
 func (w *Worker) listen() (net.Listener, error) {
 	if w.spec.SharedSocket {
-		f := os.NewFile(FdSocket, "tulpar-socket")
+		f := os.NewFile(FdSocket, "balius-socket")
 		defer f.Close()
 		return netx.Listen(f, w.cfg.Backlog)
 	}
@@ -313,9 +313,9 @@ func (w *Worker) dispatch(rsgi bool, kind C.int, state any, r *http.Request, ci 
 	w.loop.Submit(func() {
 		hp, hn := cbuf(*head)
 		if rsgi {
-			C.tulpar_rsgi_dispatch(kind, h, hp, hn)
+			C.balius_rsgi_dispatch(kind, h, hp, hn)
 		} else {
-			C.tulpar_asgi_dispatch(kind, h, hp, hn)
+			C.balius_asgi_dispatch(kind, h, hp, hn)
 		}
 		putHead(head)
 	})
@@ -334,7 +334,7 @@ func (w *Worker) shutdown() {
 			w.ws.wait(5 * time.Second)
 			if w.loop != nil {
 				// Runs on the loop thread, after everything queued so far.
-				w.loop.Submit(func() { C.tulpar_call_stop() })
+				w.loop.Submit(func() { C.balius_call_stop() })
 			}
 			close(w.stopped)
 		}()
@@ -360,7 +360,7 @@ func (w *Worker) watchSupervisor() {
 }
 
 func (w *Worker) reportMetrics() {
-	ipc := os.NewFile(FdIPC, "tulpar-ipc")
+	ipc := os.NewFile(FdIPC, "balius-ipc")
 	enc := json.NewEncoder(ipc)
 	tick := time.NewTicker(time.Duration(max(1, w.cfg.MetricsScrapeInterval)) * time.Second)
 	defer tick.Stop()

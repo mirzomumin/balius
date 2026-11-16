@@ -12,7 +12,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/mirzomumin/tulpar/internal/logx"
+	"github.com/mirzomumin/balius/internal/logx"
 )
 
 // Changes spread over more than this are reported in several batches.

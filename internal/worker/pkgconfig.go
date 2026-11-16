@@ -1,9 +1,9 @@
-//go:build !tulpar_pyflags
+//go:build !balius_pyflags
 
 package worker
 
 // By default the interpreter comes from the system's `python3-embed`
-// pkg-config module. Building with the `tulpar_pyflags` tag disables this,
+// pkg-config module. Building with the `balius_pyflags` tag disables this,
 // and the flags are expected in CGO_CFLAGS / CGO_LDFLAGS instead (see the
 // Makefile), which also lets the build cache tell interpreters apart.
 

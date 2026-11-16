@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 func TestParseEnvFile(t *testing.T) {
@@ -55,8 +55,8 @@ func TestLoadEnvPrecedence(t *testing.T) {
 }
 
 func TestWorkerEnviron(t *testing.T) {
-	got := workerEnviron([]string{"PATH=/bin", "TULPAR_SSL_KEYFILE_PASSWORD=x", "TULPAR_CPUPROFILE=/p", "XTULPAR_=1"})
-	if !reflect.DeepEqual(got, []string{"PATH=/bin", "TULPAR_CPUPROFILE=/p", "XTULPAR_=1"}) {
+	got := workerEnviron([]string{"PATH=/bin", "BALIUS_SSL_KEYFILE_PASSWORD=x", "BALIUS_CPUPROFILE=/p", "XBALIUS_=1"})
+	if !reflect.DeepEqual(got, []string{"PATH=/bin", "BALIUS_CPUPROFILE=/p", "XBALIUS_=1"}) {
 		t.Errorf("got %v", got)
 	}
 }

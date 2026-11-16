@@ -1,6 +1,6 @@
-tulpar is a Go port of granian (https://github.com/emmett-framework/granian).
-Parts of tulpar derive from granian: the embedded Python modules under
-internal/worker/pysrc/tulpar (marked "Ported from granian"), the RSGI
+balius is a Go port of granian (https://github.com/emmett-framework/granian).
+Parts of balius derive from granian: the embedded Python modules under
+internal/worker/pysrc/balius (marked "Ported from granian"), the RSGI
 specification it implements, and the test applications and fixtures under
 tests/apps and tests/fixtures. Those parts are covered by granian's license:
 

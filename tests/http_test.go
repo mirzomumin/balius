@@ -29,7 +29,7 @@ func TestASGI(t *testing.T) {
 		res := get(t, s.URL("/info?test=true"))
 		expect(t, "status", res.Status, 200)
 		expect(t, "content-type", res.Header.Get("Content-Type"), "application/json")
-		expect(t, "server", res.Header.Get("Server"), "tulpar")
+		expect(t, "server", res.Header.Get("Server"), "balius")
 		data := decode(t, res.Body)
 		expect(t, "asgi", fmt.Sprint(data["asgi"]), "map[spec_version:2.3 version:3.0]")
 		expect(t, "type", data["type"], any("http"))
@@ -262,9 +262,9 @@ func TestURLPathPrefix(t *testing.T) {
 func TestAccessLog(t *testing.T) {
 	s := startServer(t, "--interface", "asgi", "--access-log",
 		"--access-log-fmt", `%(method)s %(path)s %(status)d %(header{user-agent})s`, "tests.apps.asgi:app")
-	get(t, s.URL("/info"), "User-Agent", "tulpar-test")
+	get(t, s.URL("/info"), "User-Agent", "balius-test")
 	s.Stop()
-	if !strings.Contains(s.Output(), "GET /info 200 tulpar-test") {
+	if !strings.Contains(s.Output(), "GET /info 200 balius-test") {
 		t.Errorf("access log line not found in:\n%s", s.Output())
 	}
 }

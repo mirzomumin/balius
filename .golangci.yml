@@ -51,4 +51,4 @@ formatters:
   enable: [gofumpt, goimports]
   settings:
     goimports:
-      local-prefixes: [github.com/mirzomumin/tulpar]
+      local-prefixes: [github.com/mirzomumin/balius]

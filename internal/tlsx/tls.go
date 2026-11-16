@@ -1,4 +1,4 @@
-// Package tlsx builds the TLS server configuration of tulpar workers:
+// Package tlsx builds the TLS server configuration of balius workers:
 // certificate chain, (optionally encrypted) private key, minimum protocol
 // version, client certificate verification and revocation lists.
 package tlsx
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 // ServerConfig returns the TLS configuration for cfg.

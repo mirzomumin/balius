@@ -16,9 +16,9 @@ func TestRender(t *testing.T) {
 
 	out := a.Render()
 	for _, want := range []string{
-		"# TYPE tulpar_workers_spawns counter\ntulpar_workers_spawns 2\n",
-		"# TYPE tulpar_connections_active gauge\ntulpar_connections_active{worker=\"2\"} 3\n",
-		"tulpar_requests_handled{worker=\"2\"} 7\n",
+		"# TYPE balius_workers_spawns counter\nbalius_workers_spawns 2\n",
+		"# TYPE balius_connections_active gauge\nbalius_connections_active{worker=\"2\"} 3\n",
+		"balius_requests_handled{worker=\"2\"} 7\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

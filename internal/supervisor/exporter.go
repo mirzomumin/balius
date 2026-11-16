@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mirzomumin/tulpar/internal/metrics"
+	"github.com/mirzomumin/balius/internal/metrics"
 )
 
 // exporter serves the Prometheus metrics endpoint.

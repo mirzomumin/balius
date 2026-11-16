@@ -3,23 +3,23 @@ import time
 from enum import Enum
 from functools import wraps
 
-import _tulpar
-from _tulpar import (
+import _balius
+from _balius import (
     RSGIHTTPProtocol as HTTPProtocol,  # noqa: F401
 )
-from _tulpar import (
+from _balius import (
     RSGIProtocolClosed as ProtocolClosed,  # noqa: F401
 )
-from _tulpar import (
+from _balius import (
     RSGIProtocolError as ProtocolError,  # noqa: F401
 )
-from _tulpar import (
+from _balius import (
     RSGIScope as Scope,  # noqa: F401
 )
-from _tulpar import (
+from _balius import (
     RSGIWebsocketMessage as WebsocketMessage,  # noqa: F401
 )
-from _tulpar import (
+from _balius import (
     RSGIWebsocketProtocol as WebsocketProtocol,  # noqa: F401
 )
 
@@ -69,7 +69,7 @@ class Headers:
         return f'Headers({self.items()!r})'
 
 
-_tulpar.set_types(Headers)
+_balius.set_types(Headers)
 
 
 class WebsocketMessageType(int, Enum):

@@ -1,5 +1,5 @@
-// Package cli is the tulpar command line: it mirrors granian's options,
-// each of which can also be set through a TULPAR_* environment variable.
+// Package cli is the balius command line: it mirrors granian's options,
+// each of which can also be set through a BALIUS_* environment variable.
 package cli
 
 import (
@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mirzomumin/tulpar/internal/config"
-	"github.com/mirzomumin/tulpar/internal/logx"
-	"github.com/mirzomumin/tulpar/internal/supervisor"
+	"github.com/mirzomumin/balius/internal/config"
+	"github.com/mirzomumin/balius/internal/logx"
+	"github.com/mirzomumin/balius/internal/supervisor"
 )
 
 // option describes one command line option.
 type option struct {
 	name    string // long name, without dashes
-	env     string // environment variable suffix (after TULPAR_)
+	env     string // environment variable suffix (after BALIUS_)
 	meta    string // value placeholder in the help
 	help    string
 	def     string // default shown in the help
@@ -336,7 +336,7 @@ var (
 // parse applies the environment, then the command line (which wins).
 func (p *parser) parse(args []string, getenv func(string) string) error {
 	for _, o := range p.options {
-		v := getenv("TULPAR_" + o.env)
+		v := getenv("BALIUS_" + o.env)
 		if v == "" {
 			continue
 		}
@@ -346,7 +346,7 @@ func (p *parser) parse(args []string, getenv func(string) string) error {
 		}
 		for _, value := range values {
 			if err := o.set(value); err != nil {
-				return config.Errorf("invalid value for TULPAR_%s: %v", o.env, err)
+				return config.Errorf("invalid value for BALIUS_%s: %v", o.env, err)
 			}
 		}
 	}
@@ -446,7 +446,7 @@ func (p *parser) finish() error {
 }
 
 func (p *parser) help(w io.Writer) {
-	fmt.Fprintf(w, "Usage: tulpar [OPTIONS] APP\n\n  APP  Application target to serve.  [required]\n\nOptions:\n")
+	fmt.Fprintf(w, "Usage: balius [OPTIONS] APP\n\n  APP  Application target to serve.  [required]\n\nOptions:\n")
 	for _, o := range p.options {
 		var head string
 		if o.boolean {
@@ -454,7 +454,7 @@ func (p *parser) help(w io.Writer) {
 		} else {
 			head = fmt.Sprintf("--%s %s", o.name, o.meta)
 		}
-		extra := "env var: TULPAR_" + o.env
+		extra := "env var: BALIUS_" + o.env
 		if o.def != "" {
 			extra += "; default: " + o.def
 		}
@@ -495,7 +495,7 @@ func Parse(args []string, getenv func(string) string) (*config.Config, []config.
 	return p.cfg, notes, err
 }
 
-// Main runs the tulpar command and returns its exit code.
+// Main runs the balius command and returns its exit code.
 func Main(args []string) int {
 	cfg, notes, err := Parse(args, os.Getenv)
 	switch {
@@ -503,10 +503,10 @@ func Main(args []string) int {
 		newParser().help(os.Stdout)
 		return 0
 	case errors.Is(err, errVersion):
-		fmt.Printf("tulpar %s\n", config.Version)
+		fmt.Printf("balius %s\n", config.Version)
 		return 0
 	case err != nil:
-		fmt.Fprintf(os.Stderr, "Usage: tulpar [OPTIONS] APP\nTry 'tulpar --help' for help.\n\nError: %s\n",
+		fmt.Fprintf(os.Stderr, "Usage: balius [OPTIONS] APP\nTry 'balius --help' for help.\n\nError: %s\n",
 			strings.TrimPrefix(err.Error(), config.ErrConfig.Error()+": "))
 		return 2
 	}

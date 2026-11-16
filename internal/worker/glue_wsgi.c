@@ -1,5 +1,5 @@
 /*
- * tulpar - C glue: WSGI environ, response protocol and request body.
+ * balius - C glue: WSGI environ, response protocol and request body.
  *
  * WSGI runs on a pool of Python threads owned by the Go runtime. Calls that
  * may block on the network release the GIL around the Go call.
@@ -109,7 +109,7 @@ static PyMethodDef wsgi_proto_methods[] = {
 };
 
 static PyTypeObject WsgiProtoType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.WSGIProtocol",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.WSGIProtocol",
     .tp_basicsize = sizeof(GcProto),
     .tp_dealloc = (destructor)gc_proto_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -228,7 +228,7 @@ static PyMethodDef body_methods[] = {
 };
 
 static PyTypeObject WsgiBodyType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.WSGIBody",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.WSGIBody",
     .tp_basicsize = sizeof(GcProtoRef),
     .tp_dealloc = (destructor)gc_protoref_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -299,7 +299,7 @@ fail:
     return NULL;
 }
 
-int tulpar_wsgi_call(uintptr_t h, const char *head, Py_ssize_t n) {
+int balius_wsgi_call(uintptr_t h, const char *head, Py_ssize_t n) {
     GcProto *proto = gc_proto_new(&WsgiProtoType, h);
     if (!proto) {
         gc_report_exc("wsgi dispatch");
@@ -339,17 +339,17 @@ static int64_t now_us(void) {
  * whether more threads would help (see pool.go). */
 static _Atomic int gil_waiters = 0;
 
-int tulpar_gil_waiters(void) {
+int balius_gil_waiters(void) {
     return gil_waiters;
 }
 
-int tulpar_wsgi_run(PyThreadState *tstate, uintptr_t h, const char *head, Py_ssize_t n, int64_t *wait_us) {
+int balius_wsgi_run(PyThreadState *tstate, uintptr_t h, const char *head, Py_ssize_t n, int64_t *wait_us) {
     int64_t start = now_us();
     gil_waiters++;
     PyEval_RestoreThread(tstate);
     gil_waiters--;
     *wait_us = now_us() - start;
-    int rc = tulpar_wsgi_call(h, head, n);
+    int rc = balius_wsgi_call(h, head, n);
     PyEval_SaveThread();
     return rc;
 }

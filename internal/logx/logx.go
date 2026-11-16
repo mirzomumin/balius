@@ -1,6 +1,6 @@
-// Package logx is the runtime logger used by the Go side of tulpar.
+// Package logx is the runtime logger used by the Go side of balius.
 //
-// Output mirrors the format of the Python-side `_tulpar` logger
+// Output mirrors the format of the Python-side `_balius` logger
 // (`[LEVEL] message` on stdout), so supervisor, Go worker runtime and Python
 // produce the same kind of lines.
 package logx

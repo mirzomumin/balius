@@ -1,5 +1,5 @@
 /*
- * tulpar - C glue: RSGI scope, protocol objects and transports.
+ * balius - C glue: RSGI scope, protocol objects and transports.
  */
 #include "glue_internal.h"
 
@@ -56,7 +56,7 @@ static PyGetSetDef scope_getset[] = {
 };
 
 static PyTypeObject RsgiScopeType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIScope",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIScope",
     .tp_basicsize = sizeof(RsgiScope),
     .tp_dealloc = (destructor)scope_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -226,7 +226,7 @@ static PyMethodDef stream_methods[] = {
 };
 
 static PyTypeObject RsgiStreamType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIHTTPStreamTransport",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIHTTPStreamTransport",
     .tp_basicsize = sizeof(GcProtoRef),
     .tp_dealloc = (destructor)stream_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -377,7 +377,7 @@ static PyMethodDef http_methods[] = {
 };
 
 static PyTypeObject RsgiHTTPType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIHTTPProtocol",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIHTTPProtocol",
     .tp_basicsize = sizeof(GcProto),
     .tp_dealloc = (destructor)gc_proto_dealloc,
     .tp_as_async = &http_async,
@@ -405,14 +405,14 @@ static PyMemberDef wsmsg_members[] = {
 };
 
 static PyTypeObject RsgiWSMessageType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIWebsocketMessage",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIWebsocketMessage",
     .tp_basicsize = sizeof(RsgiWSMessage),
     .tp_dealloc = (destructor)wsmsg_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_members = wsmsg_members,
 };
 
-PyObject *tulpar_rsgi_ws_message(int kind, const char *p, Py_ssize_t n) {
+PyObject *balius_rsgi_ws_message(int kind, const char *p, Py_ssize_t n) {
     PyObject *data = NULL;
     if (kind == 1) {
         data = PyBytes_FromStringAndSize(p, n);
@@ -463,14 +463,14 @@ static PyMethodDef wstrx_methods[] = {
 };
 
 static PyTypeObject RsgiWSTransportType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIWebsocketTransport",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIWebsocketTransport",
     .tp_basicsize = sizeof(GcProtoRef),
     .tp_dealloc = (destructor)gc_protoref_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_methods = wstrx_methods,
 };
 
-PyObject *tulpar_rsgi_ws_transport(PyObject *proto) {
+PyObject *balius_rsgi_ws_transport(PyObject *proto) {
     return (PyObject *)gc_protoref_new(&RsgiWSTransportType, proto);
 }
 
@@ -503,7 +503,7 @@ static PyMethodDef ws_methods[] = {
 };
 
 static PyTypeObject RsgiWSType = {
-    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_tulpar.RSGIWebsocketProtocol",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_balius.RSGIWebsocketProtocol",
     .tp_basicsize = sizeof(GcProto),
     .tp_dealloc = (destructor)gc_proto_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_DISALLOW_INSTANTIATION,
@@ -512,7 +512,7 @@ static PyTypeObject RsgiWSType = {
 
 /* ---- dispatch ------------------------------------------------------------------ */
 
-void tulpar_rsgi_dispatch(int kind, uintptr_t h, const char *head, Py_ssize_t n) {
+void balius_rsgi_dispatch(int kind, uintptr_t h, const char *head, Py_ssize_t n) {
     gc_dispatch(kind == GC_KIND_WS ? &RsgiWSType : &RsgiHTTPType, build_scope, kind, h, head, n);
 }
 

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mirzomumin/tulpar/internal/config"
+	"github.com/mirzomumin/balius/internal/config"
 )
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
@@ -50,10 +50,10 @@ func TestParseFlags(t *testing.T) {
 
 func TestParseEnvironment(t *testing.T) {
 	cfg, _, err := Parse([]string{"--port", "9000", "app:app"}, env(map[string]string{
-		"TULPAR_PORT":       "7000",
-		"TULPAR_INTERFACE":  "asgi",
-		"TULPAR_WEBSOCKETS": "false",
-		"TULPAR_ENV_FILES":  "a.env b.env",
+		"BALIUS_PORT":       "7000",
+		"BALIUS_INTERFACE":  "asgi",
+		"BALIUS_WEBSOCKETS": "false",
+		"BALIUS_ENV_FILES":  "a.env b.env",
 	}))
 	if err != nil {
 		t.Fatal(err)

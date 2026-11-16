@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mirzomumin/tulpar/internal/metrics"
+	"github.com/mirzomumin/balius/internal/metrics"
 )
 
 // pyPool is the pool of Python threads running WSGI applications.
@@ -80,7 +80,7 @@ func (p *pyPool) run(task poolTask) bool {
 		case <-p.quit:
 			return false
 		case <-timer.C:
-			if C.tulpar_gil_waiters() == 0 {
+			if C.balius_gil_waiters() == 0 {
 				if n := p.threads.Load(); n < p.max && p.threads.CompareAndSwap(n, n+1) {
 					p.spawn(false)
 				}

@@ -1,4 +1,4 @@
-// Package metrics holds the runtime counters of tulpar workers and renders
+// Package metrics holds the runtime counters of balius workers and renders
 // them in the Prometheus text exposition format.
 package metrics
 
@@ -11,7 +11,7 @@ import (
 )
 
 // Prefix is prepended to every exported metric name.
-const Prefix = "tulpar_"
+const Prefix = "balius_"
 
 // Worker is the set of live counters of one worker process.
 type Worker struct {

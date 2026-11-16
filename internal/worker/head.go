@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mirzomumin/tulpar/internal/static"
+	"github.com/mirzomumin/balius/internal/static"
 )
 
 // The request head crosses the Go/C boundary as a single flat buffer, so

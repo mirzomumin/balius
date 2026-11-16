@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/mirzomumin/tulpar/internal/logx"
+	"github.com/mirzomumin/balius/internal/logx"
 )
 
 // respKind tells the handler goroutine how to produce the response.
@@ -174,12 +174,12 @@ func (p *asgiHTTP) appDone() {
 
 func (p *asgiHTTP) receive() pyObj {
 	if p.rxClosed.Load() {
-		return C.tulpar_done(C.tulpar_asgi_msg_disconnect())
+		return C.balius_done(C.balius_asgi_msg_disconnect())
 	}
 	if !p.rxExhausted.Load() && p.body.empty {
 		// nothing to wait for: answer without suspending the coroutine
 		p.rxExhausted.Store(true)
-		return C.tulpar_done(C.tulpar_asgi_msg_request(nil, 0, 0))
+		return C.balius_done(C.balius_asgi_msg_request(nil, 0, 0))
 	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
@@ -193,7 +193,7 @@ func (p *asgiHTTP) receive() pyObj {
 			case <-p.gone.ch:
 				p.rxClosed.Store(true)
 			}
-			fut.resolveWith(func() pyObj { return C.tulpar_asgi_msg_disconnect() })
+			fut.resolveWith(func() pyObj { return C.balius_asgi_msg_disconnect() })
 		}()
 		return obj
 	}
@@ -210,7 +210,7 @@ func (p *asgiHTTP) readBody(fut pyFuture) {
 		bodyBufPool.Put(bp)
 		p.rxExhausted.Store(true)
 		p.txDone.set()
-		fut.resolveWith(func() pyObj { return C.tulpar_asgi_msg_disconnect() })
+		fut.resolveWith(func() pyObj { return C.balius_asgi_msg_disconnect() })
 		return
 	}
 	more := err == nil
@@ -223,7 +223,7 @@ func (p *asgiHTTP) readBody(fut pyFuture) {
 		if more {
 			cmore = 1
 		}
-		msg := C.tulpar_asgi_msg_request(cp, cn, cmore)
+		msg := C.balius_asgi_msg_request(cp, cn, cmore)
 		bodyBufPool.Put(bp)
 		return msg
 	})

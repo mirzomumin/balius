@@ -1,4 +1,4 @@
-// Package netx builds the listening sockets of tulpar and implements the
+// Package netx builds the listening sockets of balius and implements the
 // per-worker backpressure on accepted connections.
 package netx
 
@@ -71,7 +71,7 @@ func TCPSocket(host string, port int) (*os.File, int, error) {
 	case *unix.SockaddrInet6:
 		port = a.Port
 	}
-	return os.NewFile(uintptr(fd), "tulpar-tcp"), port, nil
+	return os.NewFile(uintptr(fd), "balius-tcp"), port, nil
 }
 
 // UnixSocket creates a socket bound to the given filesystem path. A stale
@@ -103,7 +103,7 @@ func UnixSocket(path string, perm int) (*os.File, error) {
 			return nil, fmt.Errorf("chmod %s: %w", path, err)
 		}
 	}
-	return os.NewFile(uintptr(fd), "tulpar-uds"), nil
+	return os.NewFile(uintptr(fd), "balius-uds"), nil
 }
 
 // Listen starts listening on a bound socket and wraps it in a net.Listener.

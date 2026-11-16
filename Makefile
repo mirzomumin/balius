@@ -1,4 +1,4 @@
-# tulpar build.
+# balius build.
 #
 # The worker embeds CPython, so the binary is built against one interpreter:
 # PYTHON selects which (its `-config` script must be available, as shipped by
@@ -12,7 +12,7 @@
 
 PYTHON      ?= python3
 PYCONFIG    := $(shell command -v $(PYTHON)-config 2>/dev/null)
-BIN         := bin/tulpar
+BIN         := bin/balius
 GO          ?= go
 
 ifeq ($(PYCONFIG),)
@@ -33,7 +33,7 @@ endif
 # passed through the environment: the go build cache keys on them
 export CGO_CFLAGS  := $(PY_CFLAGS) -O2
 export CGO_LDFLAGS := $(PY_LIBS)
-GOFLAGS_TAGS := -tags tulpar_pyflags
+GOFLAGS_TAGS := -tags balius_pyflags
 
 .PHONY: all build race test test-unit test-integration vet lint clean
 
@@ -52,7 +52,7 @@ test-unit:
 	$(GO) test $(GOFLAGS_TAGS) ./internal/...
 
 test-integration: build
-	TULPAR_BIN=$(abspath $(BIN)) TULPAR_PYTHON=$(PYTHON) $(GO) test $(GOFLAGS_TAGS) -count=1 -v ./tests/...
+	BALIUS_BIN=$(abspath $(BIN)) BALIUS_PYTHON=$(PYTHON) $(GO) test $(GOFLAGS_TAGS) -count=1 -v ./tests/...
 
 test: test-unit test-integration
 

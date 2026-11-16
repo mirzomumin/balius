@@ -37,16 +37,16 @@ LOGGING_CONFIG = {
         'access': {'formatter': 'access', 'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout'},
     },
     'loggers': {
-        '_tulpar': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
-        'tulpar.access': {'handlers': ['access'], 'level': 'INFO', 'propagate': False},
+        '_balius': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'balius.access': {'handlers': ['access'], 'level': 'INFO', 'propagate': False},
     },
 }
 
 DEFAULT_ACCESSLOG_FMT = '[%(time)s] %(addr)s - "%(method)s %(path)s %(protocol)s" %(status)d %(dt_ms).3f'
 
 # NOTE: same name the Go runtime logs under
-logger = logging.getLogger('_tulpar')
-access_logger = logging.getLogger('tulpar.access')
+logger = logging.getLogger('_balius')
+access_logger = logging.getLogger('balius.access')
 
 
 def configure_logging(level: str, config: dict[str, Any] | None = None, enabled: bool = True):
@@ -55,7 +55,7 @@ def configure_logging(level: str, config: dict[str, Any] | None = None, enabled:
     if config:
         log_config.update(config)
 
-    log_config['loggers'].setdefault('_tulpar', {})['level'] = log_levels_map.get(level, logging.INFO)
+    log_config['loggers'].setdefault('_balius', {})['level'] = log_levels_map.get(level, logging.INFO)
     logging.config.dictConfig(log_config)
 
     if not enabled:
