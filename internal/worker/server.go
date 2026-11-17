@@ -177,18 +177,23 @@ func Run() int {
 
 // goProcs sizes the Go scheduler of a worker.
 //
-// Threads coming back from Python (the event loop, or the WSGI pool
-// threads) need a scheduler slot to run Go code, as do the goroutines
-// doing network I/O: too few slots and they queue behind each other at
-// every crossing. Async workers have a single thread in Python, so a few
-// slots beyond the runtime threads saturate them; WSGI pool threads each
-// need their own.
+// goProcs sizes the Go scheduler. Threads coming back from Python (the event
+// loop, or the WSGI pool threads) need a scheduler slot to run Go code, as
+// do the goroutines doing network I/O: too few slots and they queue behind
+// each other at every crossing, too many and the work of one Python thread
+// is spread over more cores than it can use. Async workers have a single
+// thread in Python, which four slots saturate; WSGI pool threads each need
+// their own. --runtime-threads overrides both: fewer threads trade
+// throughput per worker for throughput per core.
 func goProcs(cfg *config.Config) int {
 	cpus := runtime.NumCPU()
-	if !cfg.Async() {
-		return cpus
+	switch {
+	case cfg.RuntimeThreads > 0:
+		return min(cpus, cfg.RuntimeThreads)
+	case cfg.Async():
+		return min(cpus, 4)
 	}
-	return min(cpus, max(4, cfg.RuntimeThreads+2))
+	return cpus
 }
 
 // start brings the network side up. It runs once the application is loaded.

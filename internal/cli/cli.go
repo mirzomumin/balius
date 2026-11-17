@@ -208,8 +208,10 @@ func newParser() *parser {
 	p.duration("blocking-threads-idle-timeout",
 		"The maximum amount of time in seconds (or a human-readable duration) an idle blocking thread will be kept alive",
 		"30", 5, 600, &cfg.BlockingThreadsIdleTimeout)
-	p.num("runtime-threads", "Number of runtime threads (per worker) the Go scheduler runs network I/O on",
-		"1", 1, inf, &cfg.RuntimeThreads)
+	p.num("runtime-threads",
+		"Number of threads (per worker) running Go code: network I/O and the server side of every request. "+
+			"Fewer threads serve less per worker, but more per CPU core",
+		"4 (async interfaces), CPU cores (WSGI)", 1, inf, &cfg.RuntimeThreads)
 	p.num("runtime-blocking-threads",
 		"Accepted for granian compatibility: the Go runtime sizes its blocking I/O threads on its own",
 		"", 1, inf, &ignored.n)

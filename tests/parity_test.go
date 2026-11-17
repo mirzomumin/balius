@@ -110,6 +110,44 @@ func TestWebsocketKeepalive(t *testing.T) {
 	})
 }
 
+// A client that doesn't wait for the answers: the messages pile up on both
+// sides, which takes the paths that don't suspend the application and
+// writes several frames at once. Nothing may be lost or reordered.
+func TestWebsocketBurst(t *testing.T) {
+	for _, iface := range []string{"asgi", "rsgi"} {
+		t.Run(iface, func(t *testing.T) {
+			s := startServer(t, "--interface", iface, "tests.apps."+iface+":app")
+			c, _, err := dialWS(t, wsURL(s, "/ws_echo"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.CloseNow()
+			c.SetReadLimit(1 << 20)
+			const n = 500
+			go func() {
+				for i := range n {
+					payload := fmt.Sprintf("message %d", i)
+					if i%50 == 0 {
+						// some larger than what is sent without waiting
+						payload += strings.Repeat("x", 100_000)
+					}
+					if c.Write(context.Background(), websocket.MessageText, []byte(payload)) != nil {
+						return
+					}
+				}
+			}()
+			for i := range n {
+				_, msg := readWS(t, c)
+				if want := fmt.Sprintf("message %d", i); msg != want && !strings.HasPrefix(msg, want+"x") {
+					t.Fatalf("message %d: got %.40q", i, msg)
+				}
+			}
+			// the event loop wasn't starved meanwhile
+			expect(t, "http while busy", get(t, s.URL("/info")).Status, 200)
+		})
+	}
+}
+
 func TestWebsocketMaxSize(t *testing.T) {
 	s := startServer(t, "--interface", "rsgi", "--ws-max-size", "1000", "tests.apps.rsgi:app")
 	c, _, err := dialWS(t, wsURL(s, "/ws_echo"))

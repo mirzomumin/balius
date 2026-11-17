@@ -68,7 +68,7 @@ inherited pipe.
 | granian | balius |
 | --- | --- |
 | `src/workers.rs` accept loop, semaphore backpressure | `internal/netx` (`Backpressure` listener) |
-| `src/serve.rs` mt/st runtimes | Go scheduler; `--runtime-threads` sizes `GOMAXPROCS` |
+| `src/serve.rs` mt/st runtimes | Go scheduler; `--runtime-threads` sets `GOMAXPROCS` |
 | `src/callbacks.rs` `CallbackScheduler`, `PyFutureAwaitable` | `internal/worker/py.go` loop bridge, `glue.c` awaitables |
 | `src/blocking.rs` `BlockingRunnerPool` | `internal/worker/pool.go` |
 | `src/asgi/*` | `asgi.go`, `asgi_ws.go`, `glue_asgi.c`, `pysrc/balius/asgi.py` |
@@ -196,3 +196,22 @@ granian 2.8.8, CPython 3.12). Requests per second:
 
 Large request bodies are copied once more than necessary on the RSGI and
 WSGI paths; that's the main remaining gap.
+
+**Throughput per core.** A worker runs Python on one thread and the Go side
+of every request (parsing, I/O, websocket framing) on others, so by default
+it uses more than one core: `--runtime-threads` sets how many threads run Go
+code (4 by default for the async interfaces). Fewer threads serve less per
+worker but more per core; `--runtime-threads 1` keeps a worker on a single
+core, like a uvicorn worker. With uvicorn 0.54 (uvloop, httptools) on the
+same machine, one worker each, 64 connections:
+
+| | GET rps | cores | websocket echo rps | cores |
+| --- | --- | --- | --- | --- |
+| uvicorn | 22,238 | 1.0 | 39,263 | 1.0 |
+| balius `--runtime-threads 1` | 19,135 | 1.0 | 37,242 | 0.9 |
+| balius `--runtime-threads 2` | 31,547 | 1.9 | 65,397 | 1.9 |
+| balius (default) | 43,917 | 3.1 | 103,429 | 3.4 |
+
+Websocket sends and receives that can complete on the spot don't suspend
+the application (a message already received, a send with room in the
+outgoing queue), and frames queued together go out in one write.

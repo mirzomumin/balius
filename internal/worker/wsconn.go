@@ -1,8 +1,10 @@
 package worker
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -89,13 +91,15 @@ func (w *Worker) upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subpr
 	if subprotocol != "" {
 		opts.Subprotocols = []string{subprotocol}
 	}
-	conn, err := websocket.Accept(rw, r, opts)
+	hijacker := &corkHijacker{ResponseWriter: rw}
+	conn, err := websocket.Accept(hijacker, r, opts)
 	if err != nil {
 		return nil, err
 	}
 	conn.SetReadLimit(int64(w.cfg.WSMaxSize))
 	c := &wsConn{
 		conn:      conn,
+		cork:      hijacker.conn,
 		ctx:       context.Background(),
 		closeCode: wsCloseNoStatus,
 		out:       newMailbox[wsOut](),
@@ -139,6 +143,70 @@ func (c *wsConn) pingLoop(interval, timeout time.Duration) {
 	}
 }
 
+// corkConn is the connection under a websocket. While corked, writes are
+// collected and go out as a single one: a burst of frames costs one system
+// call (and fewer packets) instead of one per frame.
+type corkConn struct {
+	net.Conn
+	mu     sync.Mutex
+	corked bool
+	buf    []byte
+}
+
+// More than this is not worth holding back.
+const corkLimit = 64 << 10
+
+func (c *corkConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.corked {
+		return c.Conn.Write(p)
+	}
+	c.buf = append(c.buf, p...)
+	if len(c.buf) < corkLimit {
+		return len(p), nil
+	}
+	return len(p), c.flush()
+}
+
+func (c *corkConn) flush() error {
+	if len(c.buf) == 0 {
+		return nil
+	}
+	_, err := c.Conn.Write(c.buf)
+	c.buf = c.buf[:0]
+	return err
+}
+
+func (c *corkConn) cork() {
+	c.mu.Lock()
+	c.corked = true
+	c.mu.Unlock()
+}
+
+// uncork sends what was held back.
+func (c *corkConn) uncork() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.corked = false
+	return c.flush()
+}
+
+// corkHijacker makes the websocket library write through a corkConn.
+type corkHijacker struct {
+	http.ResponseWriter
+	conn *corkConn
+}
+
+func (h *corkHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, brw, err := http.NewResponseController(h.ResponseWriter).Hijack()
+	if err != nil {
+		return nil, nil, err
+	}
+	h.conn = &corkConn{Conn: conn}
+	return h.conn, brw, nil
+}
+
 // wsOut is a queued outgoing frame: a data message, or the close frame.
 type wsOut struct {
 	kind    websocket.MessageType
@@ -163,6 +231,7 @@ var errWSClosed = errors.New("websocket is closed")
 // how backpressure reaches the client.
 type wsConn struct {
 	conn  *websocket.Conn
+	cork  *corkConn
 	ctx   context.Context
 	out   *mailbox[wsOut]
 	inbox chan wsIn
@@ -171,16 +240,37 @@ type wsConn struct {
 	closeCode int         // why: set before the inbox is closed
 	broken    atomic.Bool // writes can't succeed anymore
 	closing   atomic.Bool // a close frame was queued
+	streak    int         // calls in a row that didn't suspend the application
 	over      sync.Once
 	done      chan struct{} // closed once the connection is gone
 }
 
 func (c *wsConn) writeLoop() {
-	var batch []wsOut
+	var (
+		batch []wsOut
+		held  []func(error) // callbacks of the frames waiting in the cork
+	)
+	// uncork sends the frames held back and tells their senders
+	uncork := func() {
+		err := c.cork.uncork()
+		if err != nil {
+			c.broken.Store(true)
+		}
+		for i, onWrite := range held {
+			onWrite(err)
+			held[i] = nil
+		}
+		held = held[:0]
+	}
 	for {
 		<-c.out.notify
 		var closed bool
 		batch, closed = c.out.take(batch)
+		// several frames queued: one write for all of them
+		corked := len(batch) > 1
+		if corked {
+			c.cork.cork()
+		}
 		for i := range batch {
 			item := &batch[i]
 			switch {
@@ -189,6 +279,10 @@ func (c *wsConn) writeLoop() {
 					item.onWrite(errWSClosed)
 				}
 			case item.close:
+				if corked {
+					uncork()
+					corked = false
+				}
 				c.broken.Store(true)
 				// Everything queued before is on the wire: the close is
 				// committed. Close then waits (bounded) for the peer's reply,
@@ -203,16 +297,59 @@ func (c *wsConn) writeLoop() {
 				if err != nil {
 					c.broken.Store(true)
 				}
-				if item.onWrite != nil {
+				switch {
+				case item.onWrite == nil:
+				case corked && err == nil:
+					held = append(held, item.onWrite)
+				default:
 					item.onWrite(err)
 				}
 			}
 			batch[i] = wsOut{}
 		}
+		if corked {
+			uncork()
+		}
 		if closed {
 			return
 		}
 	}
+}
+
+// Frames an application may have queued before `send` makes it wait for
+// the writer: awaiting every single write costs a round trip through the
+// event loop per message.
+const (
+	wsSendWindow    = 16
+	wsSendWindowMax = 64 << 10 // larger messages always wait
+)
+
+// A coroutine whose sends and receives all complete on the spot never
+// yields to the event loop, starving every other task: after this many in
+// a row the next one takes the slow path, which suspends it.
+const wsFastStreak = 16
+
+// fast accounts for a call about to complete without suspending the
+// coroutine, unless it is time to yield. Loop thread only, like streak.
+func (c *wsConn) fast() bool {
+	if c.streak >= wsFastStreak {
+		c.streak = 0
+		return false
+	}
+	c.streak++
+	return true
+}
+
+// trySend queues a data frame without waiting for it to be written. It
+// reports false when the sender has to wait instead (see send): the queue
+// is long, the message is large, or the connection is broken and the
+// sender must learn about it.
+func (c *wsConn) trySend(kind websocket.MessageType, data []byte) bool {
+	if len(data) > wsSendWindowMax || c.broken.Load() || c.out.size() >= wsSendWindow || !c.fast() {
+		c.streak = 0
+		return false
+	}
+	return c.out.push(wsOut{kind: kind, data: data})
 }
 
 // send queues a data frame.
@@ -285,6 +422,19 @@ func (c *wsConn) readLoop() {
 			return
 		}
 	}
+}
+
+// tryRead returns a data message that was already received, if any.
+func (c *wsConn) tryRead() (wsIn, bool) {
+	if len(c.inbox) > 0 && c.fast() {
+		select {
+		case in, ok := <-c.inbox:
+			return in, ok
+		default:
+		}
+	}
+	c.streak = 0
+	return wsIn{}, false
 }
 
 // read waits for the next data message. Once it reports closed the

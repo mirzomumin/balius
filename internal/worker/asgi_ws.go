@@ -154,6 +154,17 @@ func (p *asgiWS) receive() pyObj {
 		}
 		return C.balius_done(C.balius_asgi_msg_ws_connect())
 	}
+	if p.accepted.isSet() && !p.closed.Load() {
+		p.mu.Lock()
+		conn := p.conn
+		p.mu.Unlock()
+		if conn != nil {
+			// a message is already here: answer without suspending the coroutine
+			if in, ok := conn.tryRead(); ok {
+				return C.balius_done(asgiWSMessage(in))
+			}
+		}
+	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
 		return nil
@@ -181,19 +192,21 @@ func (p *asgiWS) receive() pyObj {
 			p.closed.Store(true)
 			code := C.int(in.closeCode)
 			fut.resolveWith(func() pyObj { return C.balius_asgi_msg_ws_disconnect(code) })
-		case in.text:
-			fut.resolveWith(func() pyObj {
-				cp, cn := cbuf(in.data)
-				return C.balius_asgi_msg_ws_text(cp, cn)
-			})
 		default:
-			fut.resolveWith(func() pyObj {
-				cp, cn := cbuf(in.data)
-				return C.balius_asgi_msg_ws_bytes(cp, cn)
-			})
+			fut.resolveWith(func() pyObj { return asgiWSMessage(in) })
 		}
 	}()
 	return obj
+}
+
+// asgiWSMessage builds the `websocket.receive` event of a data message.
+// Called on the loop thread.
+func asgiWSMessage(in wsIn) pyObj {
+	cp, cn := cbuf(in.data)
+	if in.text {
+		return C.balius_asgi_msg_ws_text(cp, cn)
+	}
+	return C.balius_asgi_msg_ws_bytes(cp, cn)
 }
 
 // ---- send ------------------------------------------------------------------
@@ -272,13 +285,16 @@ func (p *asgiWS) sendMessage(text bool, data []byte) pyObj {
 	if p.closed.Load() || conn == nil {
 		return pyEmpty()
 	}
-	fut, obj, ok := p.w.loop.newFuture()
-	if !ok {
-		return nil
-	}
 	kind := wsBinary
 	if text {
 		kind = wsText
+	}
+	if conn.trySend(kind, data) {
+		return pyEmpty()
+	}
+	fut, obj, ok := p.w.loop.newFuture()
+	if !ok {
+		return nil
 	}
 	conn.send(kind, data, func(err error) {
 		if err != nil && conn.peerGone.Load() {

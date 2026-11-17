@@ -264,6 +264,13 @@ func (m *mailbox[T]) push(v T) bool {
 	return true
 }
 
+// size is the number of items waiting for the consumer.
+func (m *mailbox[T]) size() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.items)
+}
+
 // close marks the end of the stream: queued items are still delivered.
 func (m *mailbox[T]) close() {
 	m.mu.Lock()

@@ -162,6 +162,10 @@ func (p *rsgiWS) receive() pyObj {
 	if conn == nil {
 		return pyRaise(C.GC_ERR_RSGI_PROTO, rsgiProtocolError)
 	}
+	// a message is already here: answer without suspending the coroutine
+	if in, ok := conn.tryRead(); ok {
+		return C.balius_done(rsgiWSMessage(in))
+	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
 		return nil
@@ -175,19 +179,21 @@ func (p *rsgiWS) receive() pyObj {
 		case in.closed:
 			p.closed.Store(true)
 			fut.resolveWith(func() pyObj { return C.balius_rsgi_ws_message(0, nil, 0) })
-		case in.text:
-			fut.resolveWith(func() pyObj {
-				cp, cn := cbuf(in.data)
-				return C.balius_rsgi_ws_message(2, cp, cn)
-			})
 		default:
-			fut.resolveWith(func() pyObj {
-				cp, cn := cbuf(in.data)
-				return C.balius_rsgi_ws_message(1, cp, cn)
-			})
+			fut.resolveWith(func() pyObj { return rsgiWSMessage(in) })
 		}
 	}()
 	return obj
+}
+
+// rsgiWSMessage builds the message object of a data message. Called on the
+// loop thread.
+func rsgiWSMessage(in wsIn) pyObj {
+	cp, cn := cbuf(in.data)
+	if in.text {
+		return C.balius_rsgi_ws_message(2, cp, cn)
+	}
+	return C.balius_rsgi_ws_message(1, cp, cn)
 }
 
 func (p *rsgiWS) send(text bool, data []byte) pyObj {
@@ -197,13 +203,16 @@ func (p *rsgiWS) send(text bool, data []byte) pyObj {
 	if conn == nil || p.closed.Load() {
 		return pyRaise(C.GC_ERR_RSGI_PROTO, rsgiProtocolError)
 	}
-	fut, obj, ok := p.w.loop.newFuture()
-	if !ok {
-		return nil
-	}
 	kind := wsBinary
 	if text {
 		kind = wsText
+	}
+	if conn.trySend(kind, data) {
+		return pyEmpty()
+	}
+	fut, obj, ok := p.w.loop.newFuture()
+	if !ok {
+		return nil
 	}
 	conn.send(kind, data, func(err error) {
 		if err != nil {

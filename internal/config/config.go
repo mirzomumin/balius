@@ -75,7 +75,7 @@ type Config struct {
 	Workers                    int    `json:"workers"`
 	BlockingThreads            int    `json:"blocking_threads"` // 0 = auto
 	BlockingThreadsIdleTimeout int    `json:"blocking_threads_idle_timeout"`
-	RuntimeThreads             int    `json:"runtime_threads"`
+	RuntimeThreads             int    `json:"runtime_threads"` // 0 = auto
 	Loop                       string `json:"loop"`
 
 	Backlog      int `json:"backlog"`
@@ -166,7 +166,6 @@ func Default() *Config {
 		Websocket:                  true,
 		Workers:                    1,
 		BlockingThreadsIdleTimeout: 30,
-		RuntimeThreads:             1,
 		Loop:                       "auto",
 		Backlog:                    1024,
 		HTTP1: HTTP1Settings{
