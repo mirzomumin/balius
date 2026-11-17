@@ -42,6 +42,9 @@ type proc struct {
 	exited  chan struct{}
 	// set when the supervisor itself asked the worker to stop
 	interrupted atomic.Bool
+	// time of the last heartbeat (unix nanoseconds), zero until the worker
+	// is up and beating
+	lastBeat atomic.Int64
 }
 
 func (p *proc) pid() int { return p.cmd.Process.Pid }
@@ -94,8 +97,10 @@ type Supervisor struct {
 	workers  []*proc
 	exits    chan *proc
 	signals  chan os.Signal
+	recycle  chan *proc // workers asking to be replaced
 	lifetime <-chan time.Time
 	rssTick  <-chan time.Time
+	health   <-chan time.Time
 
 	respawned    map[int]time.Time
 	rssSamples   map[int]int
@@ -119,6 +124,7 @@ func New(cfg *config.Config) (*Supervisor, error) {
 		exe:        exe,
 		baseEnv:    workerEnviron(os.Environ()),
 		exits:      make(chan *proc, 64),
+		recycle:    make(chan *proc, 64),
 		signals:    make(chan os.Signal, 8),
 		respawned:  map[int]time.Time{},
 		rssSamples: map[int]int{},
@@ -173,6 +179,9 @@ func (s *Supervisor) startup() error {
 	}
 	if s.cfg.WorkersMaxRSS > 0 {
 		s.rssTick = time.Tick(time.Duration(s.cfg.RSSSampleInterval) * time.Second)
+	}
+	if s.cfg.WorkersHealthcheckTimeout > 0 {
+		s.health = time.Tick(time.Second)
 	}
 	if s.cfg.MetricsEnabled {
 		exp, err := startExporter(s.cfg.MetricsAddress, s.cfg.MetricsPort, s.metrics)
@@ -288,22 +297,32 @@ func (s *Supervisor) spawn(idx int) (*proc, error) {
 		close(p.exited)
 		s.exits <- p
 	}()
-	go s.collectMetrics(idx, ipcR)
+	go s.collect(p, ipcR)
 
 	logx.Infof("Spawning worker-%d with PID: %d", idx+1, p.pid())
 	return p, nil
 }
 
-// collectMetrics reads the snapshots a worker reports on its IPC pipe.
-func (s *Supervisor) collectMetrics(idx int, ipc *os.File) {
+// collect reads what a worker reports on its IPC pipe.
+func (s *Supervisor) collect(p *proc, ipc *os.File) {
 	defer ipc.Close()
 	dec := json.NewDecoder(ipc)
 	for {
-		var snap metrics.Snapshot
-		if err := dec.Decode(&snap); err != nil {
+		var msg worker.Message
+		if err := dec.Decode(&msg); err != nil {
 			return
 		}
-		s.metrics.Collect(idx, snap)
+		switch {
+		case msg.Metrics != nil:
+			s.metrics.Collect(p.idx, *msg.Metrics)
+		case msg.Heartbeat:
+			p.lastBeat.Store(time.Now().UnixNano())
+		case msg.Recycle:
+			select {
+			case s.recycle <- p:
+			default:
+			}
+		}
 	}
 }
 
@@ -478,6 +497,16 @@ func (s *Supervisor) serve() {
 			s.respawnWorkers([]int{p.idx}, 0)
 			s.metrics.RespawnsErr.Add(1)
 
+		case p := <-s.recycle:
+			if s.current(p) && p.alive() {
+				logx.Infof("worker-%d served its share of requests, gracefully respawning..", p.idx+1)
+				s.respawnWorkers([]int{p.idx}, s.respawnDelay())
+				s.metrics.RespawnsRequests.Add(1)
+			}
+
+		case <-s.health:
+			s.handleHealth()
+
 		case <-s.lifetime:
 			s.handleLifetime()
 
@@ -526,6 +555,24 @@ func (s *Supervisor) handleLifetime() {
 		next = min(next, max(time.Minute, lifetime-age))
 	}
 	s.lifetime = time.After(next)
+}
+
+// handleHealth replaces the workers whose heartbeat stopped. Workers only
+// start beating once their application is loaded, so slow startups are
+// never mistaken for hangs.
+func (s *Supervisor) handleHealth() {
+	timeout := time.Duration(s.cfg.WorkersHealthcheckTimeout) * time.Second
+	for _, p := range append([]*proc{}, s.workers...) {
+		last := p.lastBeat.Load()
+		if last == 0 || !p.alive() || time.Since(time.Unix(0, last)) <= timeout {
+			continue
+		}
+		logx.Errorf("worker-%d is unresponsive, killing it", p.idx+1)
+		p.kill()
+		p.join(0)
+		s.respawnWorkers([]int{p.idx}, 0)
+		s.metrics.RespawnsHealth.Add(1)
+	}
 }
 
 func (s *Supervisor) handleRSS() {

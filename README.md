@@ -98,6 +98,32 @@ interpreter's C extensions resolve its symbols).
 environment of the interpreter given with `--python /path/to/venv/bin/python`.
 The venv must be built from the same Python version balius was built against.
 
+## Beyond granian: uvicorn parity
+
+Behaviours uvicorn users rely on, with uvicorn's defaults:
+
+| Option | Default | |
+| --- | --- | --- |
+| `--keep-alive-timeout` | `5` | Idle keep-alive connections are closed, so they can't hold the `--backpressure` slots forever |
+| `--ws-ping-interval`, `--ws-ping-timeout` | `20`, `20` | Websocket keepalive: a peer that doesn't answer a ping in time is closed with 1011. `0` disables |
+| `--ws-max-size` | `16777216` | Larger websocket messages close the connection with 1009 |
+| `--ws-per-message-deflate` | on | permessage-deflate, when the client offers it |
+| `--proxy-headers`, `--forwarded-allow-ips` | on, `127.0.0.1,::1` | `X-Forwarded-For` / `X-Forwarded-Proto` from trusted proxies set the client address and scheme, for all three interfaces. Addresses, networks, unix socket paths, or `*` |
+| `--workers-max-requests`, `--workers-max-requests-jitter` | off | A worker is gracefully replaced after serving that many requests (plus a random per-worker jitter) |
+| `--workers-healthcheck-timeout` | off | A worker whose interpreter gives no sign of life for this long is killed and replaced |
+
+The health check is a heartbeat sent after taking the GIL from a dedicated
+thread: a busy or blocked event loop still beats, an interpreter that is
+stuck (a C extension holding the GIL, a deadlock) doesn't. It is opt-in
+because legitimately long GIL-holding calls would otherwise get workers
+killed; pick a timeout well above the longest one you expect.
+
+The supervisor exports `balius_workers_respawns_for_requests` and
+`balius_workers_respawns_for_health` next to the other respawn counters.
+
+HTTP/1.0 requests are reported as `"1.0"` in the ASGI scope and `HTTP/1.0`
+in WSGI's `SERVER_PROTOCOL` (RSGI keeps granian's `"1"`).
+
 ## Differences from granian
 
 * Options that configure tokio/hyper internals are accepted for
@@ -136,6 +162,7 @@ The end-to-end suite (`tests/`) runs granian's test applications through the
 real binary and ports granian's assertions: ASGI/RSGI/WSGI scopes and
 bodies, websockets, TLS 1.2/1.3 and encrypted keys, static files and path
 traversal, Unix sockets, multiple workers, metrics, respawn and CLI errors.
+`tests/parity_test.go` covers the uvicorn-parity behaviours above.
 
 Set `BALIUS_CPUPROFILE=/path/prefix` to write a Go CPU profile per worker.
 

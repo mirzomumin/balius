@@ -43,6 +43,7 @@
     X(wss, "wss")                                                                                                      \
     X(websocket, "websocket")                                                                                          \
     X(v1, "1")                                                                                                         \
+    X(v10, "1.0")                                                                                                      \
     X(v11, "1.1")                                                                                                      \
     X(v2, "2")                                                                                                         \
     X(http_request, "http.request")                                                                                    \
@@ -60,7 +61,7 @@
     X(QUERY_STRING, "QUERY_STRING")                                                                                    \
     X(wsgi_url_scheme, "wsgi.url_scheme")                                                                              \
     X(wsgi_input, "wsgi.input")                                                                                        \
-    X(proto_http1, "HTTP/1")                                                                                           \
+    X(proto_http1, "HTTP/1.0")                                                                                         \
     X(proto_http11, "HTTP/1.1")                                                                                        \
     X(proto_http2, "HTTP/2")
 

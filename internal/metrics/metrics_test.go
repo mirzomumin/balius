@@ -8,6 +8,8 @@ import (
 func TestRender(t *testing.T) {
 	a := NewAggregator(2)
 	a.Spawns.Add(2)
+	a.RespawnsRequests.Add(3)
+	a.RespawnsHealth.Add(1)
 	w := NewWorker()
 	w.ReqHandled.Add(7)
 	w.ConnActive.Add(3)
@@ -19,6 +21,8 @@ func TestRender(t *testing.T) {
 		"# TYPE balius_workers_spawns counter\nbalius_workers_spawns 2\n",
 		"# TYPE balius_connections_active gauge\nbalius_connections_active{worker=\"2\"} 3\n",
 		"balius_requests_handled{worker=\"2\"} 7\n",
+		"balius_workers_respawns_for_requests 3\n",
+		"balius_workers_respawns_for_health 1\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

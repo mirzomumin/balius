@@ -159,6 +159,10 @@ func (p *parser) duration(name, help, def string, lo, hi int, dst *int) {
 		func(v string) (int, error) { return parseDuration(v, lo, hi) })
 }
 
+func (p *parser) seconds(name, help, def string, dst *float64) {
+	opt(p, option{name: name, meta: "FLOAT", help: help, def: def}, dst, parseSeconds)
+}
+
 func (p *parser) flag(name, help, def string, dst *bool) *option {
 	return opt(p, option{name: name, help: help, def: def, boolean: true}, dst, parseBool)
 }
@@ -226,6 +230,9 @@ func newParser() *parser {
 	p.flag("http1-pipeline-flush",
 		"Accepted for granian compatibility: responses are always flushed as soon as they complete",
 		"disabled", &ignored.b)
+	p.duration("keep-alive-timeout",
+		"Close keep-alive connections after this long (in seconds or a human-readable duration) without a request",
+		"5", 1, 86400, &cfg.KeepAliveTimeout)
 	p.flag("http2-adaptive-window",
 		"Accepted for granian compatibility: flow control windows are managed by the Go HTTP/2 stack",
 		"disabled", &ignored.b)
@@ -250,6 +257,22 @@ func newParser() *parser {
 		"Accepted for granian compatibility: write buffers are managed by the Go HTTP/2 stack",
 		"409600", 1024, inf, &ignored.n)
 
+	p.seconds("ws-ping-interval", "Websocket keepalive ping interval in seconds. 0 to disable.", "20",
+		&cfg.WSPingInterval)
+	p.seconds("ws-ping-timeout",
+		"Seconds to wait for the pong of a keepalive ping before closing the websocket. 0 to wait forever.", "20",
+		&cfg.WSPingTimeout)
+	p.num("ws-max-size", "Maximum size of a websocket message, in bytes", "16777216", 1, inf, &cfg.WSMaxSize)
+	p.flag("ws-per-message-deflate", "Compress websocket messages when the client supports it", "enabled",
+		&cfg.WSCompression)
+
+	p.flag("proxy-headers",
+		"Trust X-Forwarded-For and X-Forwarded-Proto from the proxies in --forwarded-allow-ips to set the client address and scheme",
+		"enabled", &cfg.ProxyHeaders)
+	p.str("forwarded-allow-ips",
+		"Comma separated IP addresses, networks or literals (e.g. unix socket paths) of the proxies to trust; * trusts everything",
+		"127.0.0.1,::1", &cfg.ForwardedAllowIPs)
+
 	p.flag("log", "Enable logging", "enabled", &cfg.LogEnabled).env = "LOG_ENABLED"
 	p.choice("log-level", "Log level", "info",
 		[]string{"critical", "error", "warning", "warn", "info", "debug", "notset"}, &cfg.LogLevel)
@@ -270,10 +293,8 @@ func newParser() *parser {
 
 	p.flag("respawn-failed-workers", "Enable workers respawn on unexpected exit", "disabled",
 		&cfg.RespawnFailedWorkers)
-	opt(p, option{
-		name: "respawn-interval", meta: "FLOAT", def: "3.5",
-		help: "The number of seconds to sleep between workers respawn",
-	}, &cfg.RespawnInterval, parseSeconds)
+	p.seconds("respawn-interval", "The number of seconds to sleep between workers respawn", "3.5",
+		&cfg.RespawnInterval)
 	p.duration("rss-sample-interval",
 		"The sample rate in seconds (or a human-readable duration) for the resource monitor",
 		"30", 1, 300, &cfg.RSSSampleInterval)
@@ -287,6 +308,15 @@ func newParser() *parser {
 	p.duration("workers-kill-timeout",
 		"The amount of time in seconds (or a human-readable duration) to wait for killing workers that refused to gracefully stop",
 		"disabled", 1, 1800, &cfg.WorkersKillTimeout)
+
+	p.num("workers-max-requests", "The number of requests a worker serves before being gracefully respawned",
+		"", 1, inf, &cfg.WorkersMaxRequests)
+	p.num("workers-max-requests-jitter",
+		"Maximum random number of requests added to --workers-max-requests, per worker, so workers don't all respawn at once",
+		"0", 0, inf, &cfg.WorkersMaxRequestsJitter)
+	p.duration("workers-healthcheck-timeout",
+		"Respawn a worker whose Python interpreter gave no sign of life for this long (in seconds or a human-readable duration)",
+		"disabled", 2, 3600, &cfg.WorkersHealthcheckTimeout)
 
 	p.flag("factory", "Treat target as a factory function, that should be invoked to build the actual target",
 		"disabled", &cfg.Factory)

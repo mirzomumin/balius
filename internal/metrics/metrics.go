@@ -78,6 +78,10 @@ type Aggregator struct {
 	RespawnsErr atomic.Int64
 	RespawnsTTL atomic.Int64
 	RespawnsRSS atomic.Int64
+	// RespawnsRequests counts workers recycled for reaching their requests
+	// limit, RespawnsHealth those replaced for being unresponsive.
+	RespawnsRequests atomic.Int64
+	RespawnsHealth   atomic.Int64
 
 	mu      sync.Mutex
 	workers []*Snapshot
@@ -106,6 +110,8 @@ func (a *Aggregator) Render() string {
 		{"workers_respawns_for_err", a.RespawnsErr.Load()},
 		{"workers_respawns_for_lifetime", a.RespawnsTTL.Load()},
 		{"workers_respawns_for_rss", a.RespawnsRSS.Load()},
+		{"workers_respawns_for_requests", a.RespawnsRequests.Load()},
+		{"workers_respawns_for_health", a.RespawnsHealth.Load()},
 	}
 	for _, m := range main {
 		fmt.Fprintf(&b, "# TYPE %s%s counter\n%s%s %d\n", Prefix, m.name, Prefix, m.name, m.v)

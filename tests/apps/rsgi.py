@@ -15,6 +15,7 @@ async def info(scope: Scope, protocol: HTTPProtocol):
                 'http_version': scope.http_version,
                 'rsgi_version': scope.rsgi_version,
                 'scheme': scope.scheme,
+                'client': scope.client,
                 'method': scope.method,
                 'path': scope.path,
                 'query_string': scope.query_string,

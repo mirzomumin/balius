@@ -50,19 +50,17 @@ const (
 	wsBinary = websocket.MessageBinary
 
 	// RFC 6455 close codes (untyped: they also cross into C)
-	wsCloseNormal    = 1000
-	wsCloseGoingAway = 1001
-	wsCloseNoStatus  = 1005
+	wsCloseNormal        = 1000
+	wsCloseGoingAway     = 1001
+	wsCloseNoStatus      = 1005
+	wsCloseInternalError = 1011
 )
-
-// Largest message accepted from a client.
-const wsReadLimit = 64 << 20
 
 // upgradeWebsocket completes the handshake and takes the connection over.
 //
 // The subprotocol is only confirmed when the client offered it, as RFC 6455
 // requires (a client must fail the connection on any other value).
-func upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subprotocol string, extra []headerKV) (*wsConn, error) {
+func (w *Worker) upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subprotocol string, extra []headerKV) (*wsConn, error) {
 	h := rw.Header()
 	h.Set("Server", static.ServerName)
 	serverSet := false
@@ -83,6 +81,11 @@ func upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subprotocol strin
 		InsecureSkipVerify: true,
 		CompressionMode:    websocket.CompressionDisabled,
 	}
+	if w.cfg.WSCompression {
+		// per-message compression without a window kept between messages:
+		// no memory held per connection, small messages are left alone
+		opts.CompressionMode = websocket.CompressionNoContextTakeover
+	}
 	if subprotocol != "" {
 		opts.Subprotocols = []string{subprotocol}
 	}
@@ -90,7 +93,7 @@ func upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subprotocol strin
 	if err != nil {
 		return nil, err
 	}
-	conn.SetReadLimit(wsReadLimit)
+	conn.SetReadLimit(int64(w.cfg.WSMaxSize))
 	c := &wsConn{
 		conn:      conn,
 		ctx:       context.Background(),
@@ -101,7 +104,39 @@ func upgradeWebsocket(rw http.ResponseWriter, r *http.Request, subprotocol strin
 	}
 	go c.writeLoop()
 	go c.readLoop()
+	if interval := seconds(w.cfg.WSPingInterval); interval > 0 {
+		go c.pingLoop(interval, seconds(w.cfg.WSPingTimeout))
+	}
 	return c, nil
+}
+
+func seconds(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
+
+// pingLoop keeps the connection alive through idle proxies and detects
+// peers that vanished without closing: a ping goes out every interval and
+// the connection is closed when its pong doesn't come back within timeout
+// (zero waits forever). Pongs are read by readLoop, so a client flooding an
+// application that stopped receiving looks dead too.
+func (c *wsConn) pingLoop(interval, timeout time.Duration) {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-tick.C:
+		}
+		ctx, cancel := c.ctx, context.CancelFunc(func() {})
+		if timeout > 0 {
+			ctx, cancel = context.WithTimeout(c.ctx, timeout)
+		}
+		err := c.conn.Ping(ctx)
+		cancel()
+		if err != nil {
+			c.close(wsCloseInternalError, "keepalive ping timeout", nil)
+			return
+		}
+	}
 }
 
 // wsOut is a queued outgoing frame: a data message, or the close frame.

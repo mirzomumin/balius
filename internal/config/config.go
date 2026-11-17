@@ -83,6 +83,16 @@ type Config struct {
 
 	HTTP1 HTTP1Settings `json:"http1"`
 	HTTP2 HTTP2Settings `json:"http2"`
+	// KeepAliveTimeout closes connections idle for that many seconds.
+	KeepAliveTimeout int `json:"keep_alive_timeout"`
+
+	WSPingInterval float64 `json:"ws_ping_interval"` // seconds, 0 = no pings
+	WSPingTimeout  float64 `json:"ws_ping_timeout"`  // seconds, 0 = wait forever
+	WSMaxSize      int     `json:"ws_max_size"`      // bytes
+	WSCompression  bool    `json:"ws_per_message_deflate"`
+
+	ProxyHeaders      bool   `json:"proxy_headers"`
+	ForwardedAllowIPs string `json:"forwarded_allow_ips"`
 
 	LogEnabled   bool   `json:"log_enabled"`
 	LogLevel     string `json:"log_level"`
@@ -107,6 +117,13 @@ type Config struct {
 	WorkersLifetime      int     `json:"workers_lifetime"`     // seconds, 0 = unset
 	WorkersMaxRSS        int     `json:"workers_max_rss"`      // MiB, 0 = unset
 	WorkersKillTimeout   int     `json:"workers_kill_timeout"` // seconds, 0 = unset
+	// WorkersMaxRequests recycles a worker after that many requests (0 =
+	// never), plus up to WorkersMaxRequestsJitter picked per worker.
+	WorkersMaxRequests       int `json:"workers_max_requests"`
+	WorkersMaxRequestsJitter int `json:"workers_max_requests_jitter"`
+	// WorkersHealthcheckTimeout replaces a worker whose interpreter gave no
+	// sign of life for that many seconds (0 = disabled).
+	WorkersHealthcheckTimeout int `json:"workers_healthcheck_timeout"`
 
 	Factory    bool     `json:"factory"`
 	WorkingDir string   `json:"working_dir"`
@@ -165,6 +182,13 @@ func Default() *Config {
 			MaxFrameSize:                1024 * 16,
 			MaxHeadersSize:              16 * 1024 * 1024,
 		},
+		KeepAliveTimeout:      5,
+		WSPingInterval:        20,
+		WSPingTimeout:         20,
+		WSMaxSize:             16 * 1024 * 1024,
+		WSCompression:         true,
+		ProxyHeaders:          true,
+		ForwardedAllowIPs:     "127.0.0.1,::1",
 		LogEnabled:            true,
 		LogLevel:              "info",
 		SSLProtocolMin:        "tls1.3",

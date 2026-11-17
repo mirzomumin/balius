@@ -24,6 +24,32 @@ func TestParseDefaults(t *testing.T) {
 	}
 }
 
+func TestParseParityOptions(t *testing.T) {
+	cfg, _, err := Parse([]string{"app:app"}, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.KeepAliveTimeout != 5 || cfg.WSPingInterval != 20 || cfg.WSPingTimeout != 20 || cfg.WSMaxSize != 16<<20 ||
+		!cfg.WSCompression || !cfg.ProxyHeaders || cfg.ForwardedAllowIPs != "127.0.0.1,::1" ||
+		cfg.WorkersMaxRequests != 0 || cfg.WorkersHealthcheckTimeout != 0 {
+		t.Errorf("unexpected defaults: %+v", cfg)
+	}
+	cfg, _, err = Parse([]string{
+		"--keep-alive-timeout", "1m", "--ws-ping-interval", "0.5", "--ws-ping-timeout", "2", "--ws-max-size", "1024",
+		"--no-ws-per-message-deflate", "--no-proxy-headers", "--forwarded-allow-ips", "*",
+		"--workers-max-requests", "1000", "--workers-max-requests-jitter", "50",
+		"--workers-healthcheck-timeout", "30s", "app:app",
+	}, env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.KeepAliveTimeout != 60 || cfg.WSPingInterval != 0.5 || cfg.WSPingTimeout != 2 || cfg.WSMaxSize != 1024 ||
+		cfg.WSCompression || cfg.ProxyHeaders || cfg.ForwardedAllowIPs != "*" ||
+		cfg.WorkersMaxRequests != 1000 || cfg.WorkersMaxRequestsJitter != 50 || cfg.WorkersHealthcheckTimeout != 30 {
+		t.Errorf("flags not applied: %+v", cfg)
+	}
+}
+
 func TestParseFlags(t *testing.T) {
 	cfg, _, err := Parse([]string{
 		"--interface=wsgi", "--workers", "4", "--no-http1-keep-alive", "--workers-lifetime", "2h",
@@ -84,6 +110,9 @@ func TestParseErrors(t *testing.T) {
 		{"--workers-lifetime", "9223372036854775807d", "app:app"}, // would overflow
 		{"--workers-lifetime", "300000000000", "app:app"},         // over time.Duration's range
 		{"--interface", "rsgi", "--blocking-threads", "4", "app:app"},
+		{"--keep-alive-timeout", "0", "app:app"},
+		{"--ws-ping-interval", "-1", "app:app"},
+		{"--workers-healthcheck-timeout", "1", "app:app"},
 		{"--static-path-route", "/a", "--static-path-route", "/b", "--static-path-mount", ".", "app:app"},
 	} {
 		if _, _, err := Parse(args, env(nil)); !errors.Is(err, config.ErrConfig) {

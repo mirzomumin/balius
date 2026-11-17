@@ -44,6 +44,7 @@ int gc_head_parse(gc_head *hd, const char *buf, Py_ssize_t n) {
     return 0;
 }
 
+/* The version as RSGI spells it; ASGI differs for HTTP/1.0 ("1.0"). */
 PyObject *gc_http_version(const gc_head *hd) {
     switch (hd->http_version) {
     case 1:

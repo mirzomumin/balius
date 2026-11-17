@@ -61,7 +61,7 @@ func (w *Worker) serveRSGIWebsocket(rw http.ResponseWriter, r *http.Request, ci 
 		return
 	}
 
-	conn, err := upgradeWebsocket(rw, r, "", nil)
+	conn, err := w.upgradeWebsocket(rw, r, "", nil)
 	if err != nil {
 		p.closed.Store(true)
 		w.failAccept(d)

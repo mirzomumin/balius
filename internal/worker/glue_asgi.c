@@ -54,7 +54,7 @@ static PyObject *build_scope(int kind, const char *buf, Py_ssize_t n) {
     GC_DICT_SET(scope, S_asgi, Py_BuildValue("{s:s,s:s}", "version", "3.0", "spec_version", "2.3"));
     GC_DICT_SET(scope, S_extensions, Py_BuildValue("{s:{},s:{}}", "http.response.pathsend", "websocket.http.response"));
     if (PyDict_SetItem(scope, S_type, kind == GC_KIND_WS ? S_websocket : S_http) < 0 ||
-        PyDict_SetItem(scope, S_http_version, gc_http_version(&hd)) < 0) {
+        PyDict_SetItem(scope, S_http_version, hd.http_version == 0 ? S_v10 : gc_http_version(&hd)) < 0) {
         goto fail;
     }
     GC_DICT_SET(scope, S_server, addr_tuple(hd.server_ip, hd.server_port));

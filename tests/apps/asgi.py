@@ -1,6 +1,7 @@
 import asyncio
 import json
 import pathlib
+import re
 
 try:
     import sniffio
@@ -32,6 +33,7 @@ async def info(scope, receive, send):
                     'asgi': scope['asgi'],
                     'http_version': scope['http_version'],
                     'scheme': scope['scheme'],
+                    'client': scope['client'],
                     'method': scope['method'],
                     'path': scope['path'],
                     'query_string': scope['query_string'].decode('latin-1'),
@@ -220,6 +222,12 @@ async def lifespan(scope, receive, send):
         await send({'type': 'lifespan.startup.complete'})
 
 
+async def hang(scope, receive, send):
+    # catastrophic backtracking: the regex engine never returns, and never
+    # releases the GIL, which is what an unresponsive interpreter looks like
+    re.match(r'(a+)+$', 'a' * 64 + 'b')
+
+
 async def mutate(scope, receive, send):
     # middlewares may mutate the scope: no request must see another's changes
     scope['extensions']['seen'] = scope['extensions'].get('seen', 0) + 1
@@ -244,6 +252,7 @@ def app(scope, receive, send):
         '/ws_push': ws_push,
         '/err_app': err_app,
         '/mutate': mutate,
+        '/hang': hang,
         '/err_proto/type': err_proto_msg,
         '/err_proto/flow': err_proto_flow,
         '/timeout_n': timeout_n,

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -76,8 +77,14 @@ type Worker struct {
 	files   *static.Files
 	srv     *http.Server
 	ws      *wsRegistry
+	proxies *trustedProxies // nil: forwarded headers are ignored
 
-	control *os.File
+	control   *os.File
+	ipc       *ipcChannel
+	heartbeat *heartbeat
+	// maxRequests is the request count at which the worker asks to be
+	// recycled (0: never).
+	maxRequests int64
 
 	started      bool
 	shutdownOnce sync.Once
@@ -112,7 +119,14 @@ func Run() int {
 		files:   static.New(cfg),
 		ws:      newWSRegistry(),
 		control: control,
+		ipc:     newIPCChannel(),
 		stopped: make(chan struct{}),
+	}
+	if cfg.WorkersMaxRequests > 0 {
+		w.maxRequests = int64(cfg.WorkersMaxRequests + rand.IntN(cfg.WorkersMaxRequestsJitter+1))
+	}
+	if cfg.ProxyHeaders {
+		w.proxies = parseTrustedProxies(cfg.ForwardedAllowIPs)
 	}
 	current = w
 
@@ -156,6 +170,7 @@ func Run() int {
 		w.shutdown()
 		<-w.stopped
 	}
+	w.stopHeartbeat()
 	C.balius_py_finalize()
 	return code
 }
@@ -207,6 +222,9 @@ func (w *Worker) start() error {
 	if w.cfg.MetricsEnabled {
 		go w.reportMetrics()
 	}
+	if w.cfg.WorkersHealthcheckTimeout > 0 {
+		w.startHeartbeat()
+	}
 	logx.Infof("Started worker-%d", w.id)
 	return nil
 }
@@ -239,9 +257,12 @@ func (w *Worker) newServer() (*http.Server, error) {
 		Handler:           http.HandlerFunc(w.serveHTTP),
 		Protocols:         protocols,
 		ReadHeaderTimeout: time.Duration(cfg.HTTP1.HeaderReadTimeoutMs) * time.Millisecond,
-		MaxHeaderBytes:    cfg.HTTP1.MaxBufferSize,
-		ConnContext:       connContext,
-		ErrorLog:          newServerErrorLog(),
+		// Without it idle keep-alive connections would live, and count
+		// against the backpressure limit, forever.
+		IdleTimeout:    time.Duration(cfg.KeepAliveTimeout) * time.Second,
+		MaxHeaderBytes: cfg.HTTP1.MaxBufferSize,
+		ConnContext:    w.connContext,
+		ErrorLog:       newServerErrorLog(),
 		HTTP2: &http.HTTP2Config{
 			MaxConcurrentStreams:          cfg.HTTP2.MaxConcurrentStreams,
 			MaxReadFrameSize:              cfg.HTTP2.MaxFrameSize,
@@ -268,7 +289,11 @@ func (w *Worker) newServer() (*http.Server, error) {
 
 // serveHTTP is the entry point of every request.
 func (w *Worker) serveHTTP(rw http.ResponseWriter, r *http.Request) {
-	w.metrics.ReqHandled.Add(1)
+	if w.metrics.ReqHandled.Add(1) == w.maxRequests {
+		// served its share: the supervisor starts a replacement, then
+		// stops this worker gracefully
+		go w.ipc.send(Message{Recycle: true})
+	}
 
 	if w.files != nil {
 		rawPath, _ := requestTarget(r)
@@ -357,31 +382,6 @@ func (w *Worker) watchSupervisor() {
 		}
 	}
 	w.shutdown()
-}
-
-func (w *Worker) reportMetrics() {
-	ipc := os.NewFile(FdIPC, "balius-ipc")
-	enc := json.NewEncoder(ipc)
-	tick := time.NewTicker(time.Duration(max(1, w.cfg.MetricsScrapeInterval)) * time.Second)
-	defer tick.Stop()
-	send := func() bool {
-		if w.loop != nil {
-			w.metrics.BlockingQueue.Store(w.loop.pending.Load())
-			w.metrics.BlockingBusy.Store(w.loop.busy.Load())
-		}
-		return enc.Encode(w.metrics.Snapshot()) == nil
-	}
-	for {
-		select {
-		case <-tick.C:
-			if !send() {
-				return
-			}
-		case <-w.stopped:
-			send()
-			return
-		}
-	}
 }
 
 type connStats struct{ m *metrics.Worker }

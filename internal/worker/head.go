@@ -37,6 +37,9 @@ type connInfo struct {
 	serverIP, clientIP     string
 	serverPort, clientPort uint32
 	uds                    bool
+	// proxies is set when the peer is a trusted proxy, whose X-Forwarded-*
+	// headers then replace the client address and scheme.
+	proxies *trustedProxies
 }
 
 type connInfoKey struct{}
@@ -61,8 +64,12 @@ func newConnInfo(c net.Conn) *connInfo {
 	return ci
 }
 
-func connContext(ctx context.Context, c net.Conn) context.Context {
-	return context.WithValue(ctx, connInfoKey{}, newConnInfo(c))
+func (w *Worker) connContext(ctx context.Context, c net.Conn) context.Context {
+	ci := newConnInfo(c)
+	if w.proxies != nil && w.proxies.trusts(ci.clientIP) {
+		ci.proxies = w.proxies
+	}
+	return context.WithValue(ctx, connInfoKey{}, ci)
 }
 
 var unknownConn = &connInfo{}
@@ -118,8 +125,12 @@ func headPrefix(b []byte, r *http.Request, ci *connInfo) []byte {
 	case r.ProtoMinor >= 1:
 		version = 1
 	}
+	clientIP, clientPort, secure := ci.clientIP, ci.clientPort, r.TLS != nil
+	if ci.proxies != nil {
+		clientIP, clientPort, secure = ci.proxies.apply(r.Header, clientIP, clientPort, secure)
+	}
 	var tls, flags byte
-	if r.TLS != nil {
+	if secure {
 		tls = 1
 	}
 	authority := ""
@@ -135,9 +146,9 @@ func headPrefix(b []byte, r *http.Request, ci *connInfo) []byte {
 
 	b = append(b, version, tls, flags, 0)
 	b = binary.NativeEndian.AppendUint32(b, ci.serverPort)
-	b = binary.NativeEndian.AppendUint32(b, ci.clientPort)
+	b = binary.NativeEndian.AppendUint32(b, clientPort)
 	b = putStr(b, ci.serverIP)
-	b = putStr(b, ci.clientIP)
+	b = putStr(b, clientIP)
 	b = putStr(b, r.Method)
 	b = putStr(b, static.PercentDecode(rawPath))
 	b = putStr(b, rawPath)

@@ -79,7 +79,7 @@ func (w *Worker) serveASGIWebsocket(rw http.ResponseWriter, r *http.Request, ci 
 		return
 	}
 
-	conn, err := upgradeWebsocket(rw, r, d.subprotocol, d.headers)
+	conn, err := w.upgradeWebsocket(rw, r, d.subprotocol, d.headers)
 	if err != nil {
 		// the connection was closed before the upgrade
 		p.closed.Store(true)

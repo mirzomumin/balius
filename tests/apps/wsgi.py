@@ -7,6 +7,8 @@ def info(environ, protocol):
         json.dumps(
             {
                 'scheme': environ['wsgi.url_scheme'],
+                'client': environ['REMOTE_ADDR'],
+                'protocol': environ['SERVER_PROTOCOL'],
                 'method': environ['REQUEST_METHOD'],
                 'path': environ['PATH_INFO'],
                 'query_string': environ['QUERY_STRING'],
