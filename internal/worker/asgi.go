@@ -6,6 +6,7 @@ package worker
 import "C"
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -36,6 +37,7 @@ type response struct {
 	body       []byte
 	path       string
 	start, end int64
+	hold       pyObj // a Python object body points into, released once written
 }
 
 // asgiHTTP is the state of one ASGI HTTP request.
@@ -66,6 +68,8 @@ type asgiHTTP struct {
 	// request body
 	rxExhausted atomic.Bool // the final http.request event was produced
 	rxClosed    atomic.Bool // the disconnection was observed
+	rxRead      int64       // body bytes read so far (by readBody only)
+	over        bool        // the handler returned; under mu
 }
 
 func (w *Worker) serveASGI(rw http.ResponseWriter, r *http.Request, ci *connInfo) {
@@ -95,12 +99,22 @@ func (w *Worker) serveASGI(rw http.ResponseWriter, r *http.Request, ci *connInfo
 func (p *asgiHTTP) finish() {
 	p.gone.set()
 	p.body.finish()
+	p.mu.Lock()
+	p.over = true
+	select {
+	case resp := <-p.respCh:
+		// never written: the client left first
+		p.w.release(resp.hold)
+	default:
+	}
+	p.mu.Unlock()
 }
 
 func (p *asgiHTTP) write(rw http.ResponseWriter, resp response) {
 	switch resp.kind {
 	case respFull:
 		writeFull(rw, resp.status, resp.headers, resp.body)
+		p.w.release(resp.hold)
 	case respFile:
 		writeFile(rw, resp.status, resp.headers, resp.path, 0, 0)
 	case respStream:
@@ -176,16 +190,30 @@ func (p *asgiHTTP) receive() pyObj {
 	if p.rxClosed.Load() {
 		return C.balius_done(C.balius_asgi_msg_disconnect())
 	}
-	if !p.rxExhausted.Load() && p.body.empty {
+	exhausted := p.rxExhausted.Load()
+	if !exhausted && p.body.empty {
 		// nothing to wait for: answer without suspending the coroutine
 		p.rxExhausted.Store(true)
 		return C.balius_done(C.balius_asgi_msg_request(nil, 0, 0))
 	}
+	// a body of known length is read straight into the bytes object the
+	// application gets
+	var (
+		body pyObj
+		dst  []byte
+	)
+	if left := p.r.ContentLength - p.rxRead; !exhausted && p.r.ContentLength > 0 && left > 0 {
+		if body, dst = pyBytesAlloc(int(min(left, asgiEventMax))); body == nil {
+			return nil
+		}
+	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
+		C.balius_decref(body)
 		return nil
 	}
-	if p.rxExhausted.Load() {
+	switch {
+	case exhausted:
 		// the body is consumed: the next event is the disconnection
 		go func() {
 			select {
@@ -195,12 +223,48 @@ func (p *asgiHTTP) receive() pyObj {
 			}
 			fut.resolveWith(func() pyObj { return C.balius_asgi_msg_disconnect() })
 		}()
-		return obj
+	case body != nil:
+		go p.readInto(fut, body, dst)
+	default:
+		go p.readBody(fut)
 	}
-	go p.readBody(fut)
 	return obj
 }
 
+// The largest `http.request` event made of a body of known length.
+const asgiEventMax = 1 << 20
+
+// readInto produces the next `http.request` event of a body of known
+// length: up to asgiEventMax bytes at once, as every event is a round trip
+// through the event loop and applications typically join the pieces back
+// together. dst is the contents of body, which nothing else references.
+func (p *asgiHTTP) readInto(fut pyFuture, body pyObj, dst []byte) {
+	n, err := p.body.readFull(dst)
+	if p.rxRead += int64(n); err == nil && p.rxRead == p.r.ContentLength {
+		err = io.EOF
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
+		// the client went away (or the request is already over)
+		p.rxExhausted.Store(true)
+		p.txDone.set()
+		fut.resolveWith(func() pyObj {
+			C.balius_decref(body)
+			return C.balius_asgi_msg_disconnect()
+		})
+		return
+	}
+	more := C.int(1)
+	if err != nil {
+		more = 0
+		p.rxExhausted.Store(true)
+	}
+	fut.resolveWith(func() pyObj {
+		return C.balius_asgi_msg_request_obj(C.balius_bytes_shrink(body, C.Py_ssize_t(n)), more)
+	})
+}
+
+// readBody produces the next `http.request` event of a body of unknown
+// length, as it arrives.
 func (p *asgiHTTP) readBody(fut pyFuture) {
 	bp := bodyBufPool.Get().(*[]byte)
 	buf := *bp
@@ -250,16 +314,26 @@ func (p *asgiHTTP) sendStart(status int, headers []headerKV) pyObj {
 	return pyEmpty()
 }
 
-// dispatch hands the response to the handler goroutine. Called with mu held.
+// dispatch hands the response to the handler goroutine. Called with mu held,
+// on the loop thread.
 func (p *asgiHTTP) dispatch(resp response) {
 	p.sentCode.Store(int32(resp.status))
-	select {
-	case p.respCh <- resp:
-	default:
+	if !p.over {
+		select {
+		case p.respCh <- resp:
+			return
+		default:
+		}
+	}
+	if resp.hold != nil {
+		C.balius_decref(resp.hold)
 	}
 }
 
-func (p *asgiHTTP) sendBody(body []byte, more bool) pyObj {
+// sendBody handles `http.response.body`. src is the body's memory, owned by
+// Python; obj, when not nil, is an immutable object src points into, which
+// a complete response holds on to instead of copying src.
+func (p *asgiHTTP) sendBody(obj pyObj, src []byte, more bool) pyObj {
 	p.mu.Lock()
 	switch {
 	case !p.started:
@@ -274,12 +348,20 @@ func (p *asgiHTTP) sendBody(body []byte, more bool) pyObj {
 		}
 		p.intent = nil
 		p.finished = true
-		p.dispatch(response{kind: respFull, status: intent.status, headers: intent.headers, body: body})
+		resp := response{kind: respFull, status: intent.status, headers: intent.headers}
+		if obj != nil && len(src) >= holdThreshold {
+			C.balius_incref(obj)
+			resp.body, resp.hold = src, obj
+		} else {
+			resp.body = bytes.Clone(src)
+		}
+		p.dispatch(resp)
 		p.mu.Unlock()
 		p.txDone.set()
 		return pyEmpty()
 
 	case !p.chunked:
+		body := bytes.Clone(src)
 		intent := p.intent
 		if intent == nil {
 			p.mu.Unlock()
@@ -300,7 +382,7 @@ func (p *asgiHTTP) sendBody(body []byte, more bool) pyObj {
 			p.finished = true
 		}
 		p.mu.Unlock()
-		return p.pushChunk(chunk{data: body, last: !more})
+		return p.pushChunk(chunk{data: bytes.Clone(src), last: !more})
 	}
 }
 
@@ -395,11 +477,15 @@ func goAsgiSendStart(h C.uintptr_t, ws C.int, status C.int, hdr *C.char, hlen C.
 }
 
 //export goAsgiSendBody
-func goAsgiSendBody(h C.uintptr_t, ws C.int, body *C.char, blen C.Py_ssize_t, more C.int) pyObj {
+func goAsgiSendBody(h C.uintptr_t, ws C.int, obj pyObj, body *C.char, blen C.Py_ssize_t, more C.int) pyObj {
 	switch p := handles.get(uintptr(h)).(type) {
 	case *asgiHTTP:
 		if ws == 0 {
-			return p.sendBody(C.GoBytes(unsafe.Pointer(body), C.int(blen)), more != 0)
+			var src []byte
+			if blen > 0 {
+				src = unsafe.Slice((*byte)(unsafe.Pointer(body)), int(blen))
+			}
+			return p.sendBody(obj, src, more != 0)
 		}
 	case *asgiWS:
 		if ws != 0 {

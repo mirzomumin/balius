@@ -31,6 +31,11 @@ async def echo(_, protocol: HTTPProtocol):
     protocol.response_bytes(200, [('content-type', 'text/plain; charset=utf-8')], msg)
 
 
+async def echo_str(_, protocol: HTTPProtocol):
+    msg = await protocol()
+    protocol.response_str(200, [('content-type', 'text/plain; charset=utf-8')], msg.decode())
+
+
 async def echo_stream(_, protocol: HTTPProtocol):
     trx = protocol.response_stream(200, [('content-type', 'text/plain; charset=utf-8')])
     async for msg in protocol:
@@ -134,6 +139,7 @@ def app(scope, protocol):
     return {
         '/info': info,
         '/echo': echo,
+        '/echo_str': echo_str,
         '/echos': echo_stream,
         '/file': file,
         '/file_range': file_range,

@@ -235,8 +235,10 @@ static PyTypeObject RsgiStreamType = {
 
 /* ---- HTTP protocol ----------------------------------------------------------- */
 
-static PyObject *respond(GcProto *self, int kind, int status, PyObject *headers, const char *body, Py_ssize_t blen,
-                         unsigned long long start, unsigned long long end) {
+/* `hold`, when not NULL, is an immutable object `body` points into: Go may
+ * keep a reference to it instead of copying the body. */
+static PyObject *respond(GcProto *self, int kind, int status, PyObject *headers, PyObject *hold, const char *body,
+                         Py_ssize_t blen, unsigned long long start, unsigned long long end) {
     if (status < 100 || status > 999) {
         PyErr_SetString(PyExc_ValueError, "Invalid status code");
         return NULL;
@@ -250,7 +252,7 @@ static PyObject *respond(GcProto *self, int kind, int status, PyObject *headers,
         }
         return NULL;
     }
-    int rc = goRsgiResponse(self->h, kind, status, b.buf, b.len, b.n, (char *)body, blen, start, end);
+    int rc = goRsgiResponse(self->h, kind, status, b.buf, b.len, b.n, hold, (char *)body, blen, start, end);
     gc_hbuf_free(&b);
 
     if (kind == RK_STREAM) {
@@ -273,7 +275,7 @@ static PyObject *http_response_empty(GcProto *self, PyObject *args, PyObject *kw
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO:response_empty", kw_status_headers, &status, &headers)) {
         return NULL;
     }
-    return respond(self, RK_EMPTY, status, headers, "", 0, 0, 0);
+    return respond(self, RK_EMPTY, status, headers, NULL, "", 0, 0, 0);
 }
 
 static PyObject *http_response_bytes(GcProto *self, PyObject *args, PyObject *kwargs) {
@@ -284,7 +286,9 @@ static PyObject *http_response_bytes(GcProto *self, PyObject *args, PyObject *kw
                                      &body)) {
         return NULL;
     }
-    PyObject *r = respond(self, RK_BYTES, status, headers, body.buf ? body.buf : "", body.buf ? body.len : 0, 0, 0);
+    PyObject *hold = body.obj && PyBytes_CheckExact(body.obj) ? body.obj : NULL;
+    PyObject *r =
+        respond(self, RK_BYTES, status, headers, hold, body.buf ? body.buf : "", body.buf ? body.len : 0, 0, 0);
     if (body.obj) {
         PyBuffer_Release(&body);
     }
@@ -294,13 +298,18 @@ static PyObject *http_response_bytes(GcProto *self, PyObject *args, PyObject *kw
 static PyObject *http_response_str(GcProto *self, PyObject *args, PyObject *kwargs) {
     int status = 200;
     PyObject *headers = NULL;
+    PyObject *str = NULL;
     const char *body = "";
     Py_ssize_t blen = 0;
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iOs#:response_str", kw_status_headers_body, &status, &headers,
-                                     &body, &blen)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iOU:response_str", kw_status_headers_body, &status, &headers,
+                                     &str)) {
         return NULL;
     }
-    return respond(self, RK_STR, status, headers, body, blen, 0, 0);
+    /* the UTF-8 form is cached by the (immutable) str object */
+    if (str && !(body = PyUnicode_AsUTF8AndSize(str, &blen))) {
+        return NULL;
+    }
+    return respond(self, RK_STR, status, headers, str, body, blen, 0, 0);
 }
 
 static PyObject *http_response_file(GcProto *self, PyObject *args, PyObject *kwargs) {
@@ -312,7 +321,7 @@ static PyObject *http_response_file(GcProto *self, PyObject *args, PyObject *kwa
                                      &file, &flen)) {
         return NULL;
     }
-    return respond(self, RK_FILE, status, headers, file, flen, 0, 0);
+    return respond(self, RK_FILE, status, headers, NULL, file, flen, 0, 0);
 }
 
 static PyObject *http_response_file_range(GcProto *self, PyObject *args, PyObject *kwargs) {
@@ -329,7 +338,7 @@ static PyObject *http_response_file_range(GcProto *self, PyObject *args, PyObjec
         PyErr_SetString(PyExc_ValueError, "Invalid range");
         return NULL;
     }
-    return respond(self, RK_FILE_RANGE, status, headers, file, flen, start, end);
+    return respond(self, RK_FILE_RANGE, status, headers, NULL, file, flen, start, end);
 }
 
 static PyObject *http_response_stream(GcProto *self, PyObject *args, PyObject *kwargs) {
@@ -338,7 +347,7 @@ static PyObject *http_response_stream(GcProto *self, PyObject *args, PyObject *k
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO:response_stream", kw_status_headers, &status, &headers)) {
         return NULL;
     }
-    return respond(self, RK_STREAM, status, headers, "", 0, 0, 0);
+    return respond(self, RK_STREAM, status, headers, NULL, "", 0, 0, 0);
 }
 
 static PyObject *http_client_disconnect(GcProto *self, PyObject *Py_UNUSED(ignored)) {

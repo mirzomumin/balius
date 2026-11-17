@@ -79,6 +79,11 @@ void balius_decref(PyObject *o);
 
 PyObject *balius_none(void);
 PyObject *balius_bytes(const char *p, Py_ssize_t n);
+/* A bytes object of n bytes left to fill: *data points at its contents,
+ * which may be written without the GIL while nothing else references it. */
+PyObject *balius_bytes_alloc(Py_ssize_t n, char **data);
+/* Shrinks a bytes object built with balius_bytes_alloc (reference stolen). */
+PyObject *balius_bytes_shrink(PyObject *b, Py_ssize_t n);
 
 /* Sets a Python exception of the given kind; always returns NULL. */
 PyObject *balius_raise(int kind, const char *msg);
@@ -103,6 +108,7 @@ void balius_call_stop(void);
 void balius_asgi_dispatch(int kind, uintptr_t h, const char *head, Py_ssize_t n);
 
 PyObject *balius_asgi_msg_request(const char *body, Py_ssize_t n, int more);
+PyObject *balius_asgi_msg_request_obj(PyObject *body /* stolen */, int more);
 PyObject *balius_asgi_msg_disconnect(void);
 PyObject *balius_asgi_msg_ws_connect(void);
 PyObject *balius_asgi_msg_ws_text(const char *p, Py_ssize_t n);

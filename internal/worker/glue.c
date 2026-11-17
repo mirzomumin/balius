@@ -191,6 +191,19 @@ PyObject *balius_bytes(const char *p, Py_ssize_t n) {
     return PyBytes_FromStringAndSize(p, n);
 }
 
+PyObject *balius_bytes_alloc(Py_ssize_t n, char **data) {
+    PyObject *b = PyBytes_FromStringAndSize(NULL, n);
+    *data = b ? PyBytes_AS_STRING(b) : NULL;
+    return b;
+}
+
+PyObject *balius_bytes_shrink(PyObject *b, Py_ssize_t n) {
+    if (b && n < PyBytes_GET_SIZE(b) && _PyBytes_Resize(&b, n) < 0) {
+        return NULL;
+    }
+    return b;
+}
+
 static PyObject *exc_type(int kind) {
     switch (kind) {
     case GC_ERR_RSGI_PROTO:

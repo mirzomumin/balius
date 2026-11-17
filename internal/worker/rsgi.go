@@ -28,6 +28,7 @@ type rsgiHTTP struct {
 
 	mu        sync.Mutex
 	responded bool
+	over      bool // the handler returned
 	respCh    chan response
 	stream    *mailbox[[]byte] // body of a streamed response
 
@@ -52,6 +53,15 @@ func (w *Worker) serveRSGI(rw http.ResponseWriter, r *http.Request, ci *connInfo
 	defer func() {
 		p.gone.set()
 		p.body.finish()
+		p.mu.Lock()
+		p.over = true
+		select {
+		case resp := <-p.respCh:
+			// never written: the client left first
+			w.release(resp.hold)
+		default:
+		}
+		p.mu.Unlock()
 	}()
 	select {
 	case resp := <-p.respCh:
@@ -64,6 +74,7 @@ func (p *rsgiHTTP) write(rw http.ResponseWriter, resp response) {
 	switch resp.kind {
 	case respFull:
 		writeFull(rw, resp.status, resp.headers, resp.body)
+		p.w.release(resp.hold)
 	case respFile:
 		writeFile(rw, resp.status, resp.headers, resp.path, 0, 0)
 	case respFileRange:
@@ -129,6 +140,9 @@ func (p *rsgiHTTP) readAll() pyObj {
 	if p.body.empty {
 		return C.balius_done(C.balius_bytes(nil, 0))
 	}
+	if n := p.r.ContentLength; n > 0 && n <= rsgiDirectMax {
+		return p.readAllInto(int(n))
+	}
 	fut, obj, ok := p.w.loop.newFuture()
 	if !ok {
 		return nil
@@ -152,6 +166,34 @@ func (p *rsgiHTTP) readAll() pyObj {
 			}
 		}
 		fut.resolveWith(func() pyObj { return pyBytes(data.Bytes()) })
+	}()
+	return obj
+}
+
+// Bodies of known length up to this size are read straight into the bytes
+// object `await protocol()` returns.
+const rsgiDirectMax = 64 << 20
+
+func (p *rsgiHTTP) readAllInto(size int) pyObj {
+	body, dst := pyBytesAlloc(size)
+	if body == nil {
+		return nil
+	}
+	fut, obj, ok := p.w.loop.newFuture()
+	if !ok {
+		C.balius_decref(body)
+		return nil
+	}
+	go func() {
+		n, err := p.body.readFull(dst)
+		if err != nil && !errors.Is(err, io.EOF) {
+			fut.resolveWith(func() pyObj {
+				C.balius_decref(body)
+				return pyRaise(C.GC_ERR_RSGI_CLOSED, rsgiClosedError)
+			})
+			return
+		}
+		fut.resolveWith(func() pyObj { return C.balius_bytes_shrink(body, C.Py_ssize_t(n)) })
 	}()
 	return obj
 }
@@ -248,7 +290,7 @@ func goRsgiClientDisconnect(h C.uintptr_t) pyObj {
 //
 //export goRsgiResponse
 func goRsgiResponse(h C.uintptr_t, kind C.int, status C.int, hdr *C.char, hlen C.Py_ssize_t, nh C.int,
-	body *C.char, blen C.Py_ssize_t, start C.ulonglong, end C.ulonglong,
+	hold pyObj, body *C.char, blen C.Py_ssize_t, start C.ulonglong, end C.ulonglong,
 ) C.int {
 	p, ok := handles.get(uintptr(h)).(*rsgiHTTP)
 	if !ok {
@@ -270,7 +312,14 @@ func goRsgiResponse(h C.uintptr_t, kind C.int, status C.int, hdr *C.char, hlen C
 		resp.kind = respFull
 	case C.RK_BYTES, C.RK_STR:
 		resp.kind = respFull
-		resp.body = C.GoBytes(unsafe.Pointer(body), C.int(blen))
+		if hold != nil && blen >= holdThreshold {
+			// immutable: written from where it is, instead of copied
+			C.balius_incref(hold)
+			resp.body = unsafe.Slice((*byte)(unsafe.Pointer(body)), int(blen))
+			resp.hold = hold
+		} else {
+			resp.body = C.GoBytes(unsafe.Pointer(body), C.int(blen))
+		}
 	case C.RK_FILE:
 		resp.kind = respFile
 		resp.path = C.GoStringN(body, C.int(blen))
@@ -281,6 +330,11 @@ func goRsgiResponse(h C.uintptr_t, kind C.int, status C.int, hdr *C.char, hlen C
 	case C.RK_STREAM:
 		resp.kind = respStream
 		p.stream = newMailbox[[]byte]()
+	}
+	if p.over {
+		// the client left: nobody will write it
+		C.balius_decref(resp.hold)
+		return 0
 	}
 	p.respCh <- resp
 	return 0

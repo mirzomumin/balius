@@ -228,8 +228,21 @@ func (b *reqBody) finish() {
 	b.mu.Unlock()
 }
 
-// Pooled buffers used to read request bodies.
-const bodyBufSize = 128 * 1024
+// readFull fills buf, unless the body ends (io.EOF) or fails first.
+func (b *reqBody) readFull(buf []byte) (int, error) {
+	total := 0
+	for total < len(buf) {
+		n, err := b.read(buf[total:])
+		total += n
+		if err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+// Pooled buffers used to read request bodies of unknown length.
+const bodyBufSize = 128 << 10
 
 var bodyBufPool = sync.Pool{New: func() any {
 	b := make([]byte, bodyBufSize)

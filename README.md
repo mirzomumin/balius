@@ -194,8 +194,11 @@ granian 2.8.8, CPython 3.12). Requests per second:
 | granian, echo (0–300 KB bodies) | 5,072 | **7,031** | **7,852** | |
 | balius, echo (0–300 KB bodies) | **6,241** | 5,522 | 5,295 | |
 
-Large request bodies are copied once more than necessary on the RSGI and
-WSGI paths; that's the main remaining gap.
+Those echo numbers predate the zero-copy body paths: ASGI and RSGI read a
+request body of known length straight into the `bytes` object the
+application gets (ASGI in events of up to 1 MiB), and write a large `bytes`
+(or RSGI `str`) response from where it is instead of copying it, which
+roughly doubled their echo throughput. WSGI bodies are still copied.
 
 **Throughput per core.** A worker runs Python on one thread and the Go side
 of every request (parsing, I/O, websocket framing) on others, so by default

@@ -169,6 +169,21 @@ PyObject *balius_asgi_msg_request(const char *body, Py_ssize_t n, int more) {
     return d;
 }
 
+PyObject *balius_asgi_msg_request_obj(PyObject *body, int more) {
+    if (!body) {
+        return NULL;
+    }
+    PyObject *d = msg_new(S_http_request);
+    if (!d || msg_set(d, S_body, body) < 0 || PyDict_SetItem(d, S_more_body, more ? Py_True : Py_False) < 0) {
+        if (!d) {
+            Py_DECREF(body);
+        }
+        Py_XDECREF(d);
+        return NULL;
+    }
+    return d;
+}
+
 PyObject *balius_asgi_msg_disconnect(void) {
     return msg_new(S_http_disconnect);
 }
@@ -268,7 +283,8 @@ static PyObject *send_body(GcProto *self, PyObject *msg, int ws) {
         }
         return NULL;
     }
-    PyObject *r = goAsgiSendBody(self->h, ws, (char *)p, n, more);
+    /* immutable bytes may be held by Go instead of copied */
+    PyObject *r = goAsgiSendBody(self->h, ws, PyBytes_CheckExact(body) ? body : NULL, (char *)p, n, more);
     if (have_view) {
         PyBuffer_Release(&view);
     }

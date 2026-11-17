@@ -69,6 +69,21 @@ async def echo(scope, receive, send):
     await send({'type': 'http.response.body', 'body': body, 'more_body': False})
 
 
+async def body_events(scope, receive, send):
+    # how the request body was split into events, echoed as a memoryview
+    # (which must be copied: unlike bytes, it may change after send)
+    sizes, body, more_body = [], bytearray(), True
+    while more_body:
+        msg = await receive()
+        more_body = msg['more_body']
+        sizes.append(len(msg['body']))
+        body += msg['body']
+    await send({**PLAINTEXT_RESPONSE, 'headers': [(b'x-events', ','.join(map(str, sizes)).encode())]})
+    view = memoryview(body)
+    await send({'type': 'http.response.body', 'body': view})
+    body[:4] = b'XXXX'
+
+
 async def pathsend(scope, receive, send):
     path = pathlib.Path.cwd() / 'tests' / 'fixtures' / 'static' / 'media.png'
     await send(MEDIA_RESPONSE)
@@ -242,6 +257,7 @@ def app(scope, receive, send):
         '/info': info,
         '/sniffio': sniff_aio_impl,
         '/echo': echo,
+        '/body_events': body_events,
         '/file': pathsend,
         '/ws_reject': ws_reject,
         '/ws_rejecte': ws_reject_explicit,

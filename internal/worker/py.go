@@ -252,6 +252,28 @@ func pyRaise(kind C.int, msg string) pyObj {
 
 func pyEmpty() pyObj { return C.balius_empty() }
 
+// pyBytesAlloc returns a new bytes object of n bytes and its contents, to
+// fill (without the GIL) before anything else references the object.
+func pyBytesAlloc(n int) (pyObj, []byte) {
+	var data *C.char
+	obj := C.balius_bytes_alloc(C.Py_ssize_t(n), &data) //nolint:gocritic // false positive on the cgo rewrite
+	if obj == nil {
+		return nil, nil
+	}
+	return obj, unsafe.Slice((*byte)(unsafe.Pointer(data)), n)
+}
+
+// Bodies smaller than this are copied rather than held: a copy is cheaper
+// than handing the reference back to the loop thread.
+const holdThreshold = 16 << 10
+
+// release drops a reference held off the loop thread (nil is a no-op).
+func (w *Worker) release(obj pyObj) {
+	if obj != nil {
+		w.loop.Submit(func() { C.balius_decref(obj) })
+	}
+}
+
 // pyFuture is an asyncio future owned by the Go side until it is resolved.
 // Resolution always happens on the loop thread.
 type pyFuture struct {
